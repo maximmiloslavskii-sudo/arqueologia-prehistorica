@@ -5,7 +5,166 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Arqueología Prehistórica · Mapa, yacimientos y línea de tiempo</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="styles.css" />
+  <style>
+:root {
+  --bg: #f7f6f2;
+  --card: #fff;
+  --card-soft: #fcfaf6;
+  --ink: #24211d;
+  --muted: #6e6a63;
+  --border: #e2ddd2;
+  --accent: #5d4935;
+  --accent-2: #d35b1f;
+  --shadow: 0 10px 30px rgba(38, 33, 26, 0.08);
+  --c-plioceno: #f5c542;
+  --c-pleistoceno: #d8c66a;
+  --c-pleistoceno-inferior: #7ec9a6;
+  --c-pleistoceno-medio: #e1727a;
+  --c-pleistoceno-superior: #5fb4d9;
+  --c-paleolitico: #e89249;
+  --c-hominino: #8367c7;
+  --c-cultura: #6f6f6f;
+  --c-transicion: #c95a5e;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body {
+  font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.45;
+}
+a { color: #74532a; }
+.site-header {
+  background: linear-gradient(135deg, #27231f, #604b35 65%, #8b6b44);
+  color: #fff;
+  padding: 18px 22px;
+  box-shadow: 0 4px 18px rgba(0,0,0,.12);
+}
+.site-header h1 { margin: 0; font-size: clamp(1.4rem, 2.4vw, 2.1rem); letter-spacing: -.02em; }
+.eyebrow { margin: 0 0 4px; text-transform: uppercase; letter-spacing: .12em; font-size: .72rem; opacity: .78; }
+.header-copy { margin: 6px 0 0; max-width: 980px; opacity: .88; font-size: .95rem; }
+.app-shell {
+  max-width: 1680px;
+  margin: 0 auto;
+  padding: 14px;
+  display: grid;
+  grid-template-columns: minmax(520px, 1.25fr) minmax(340px, .75fr);
+  grid-template-rows: auto minmax(460px, calc(100vh - 340px)) auto;
+  grid-template-areas:
+    "toolbar toolbar"
+    "map panel"
+    "timeline timeline";
+  gap: 14px;
+}
+.card, .toolbar-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+}
+.toolbar-card { grid-area: toolbar; padding: 12px; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.map-card { grid-area: map; min-height: 460px; display: flex; flex-direction: column; padding: 12px; }
+.site-panel { grid-area: panel; padding: 16px; overflow: auto; max-height: calc(100vh - 190px); background: var(--card-soft); }
+.timeline-card { grid-area: timeline; padding: 12px; }
+.card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+h2 { margin: 0; color: var(--accent); font-size: 1.12rem; }
+.subtitle { margin: 3px 0 0; color: var(--muted); font-size: .84rem; }
+.mode-tabs { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.mode-tab, .ghost-button {
+  border: 1px solid var(--border);
+  background: #f9f7f2;
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 7px 11px;
+  cursor: pointer;
+  font-weight: 650;
+  font-size: .83rem;
+}
+.mode-tab.is-active, .mode-tab:hover, .ghost-button:hover { background: #efe4d2; border-color: #d8c6a7; }
+.filter-grid { display: flex; flex-wrap: wrap; gap: 7px 10px; color: var(--muted); font-size: .78rem; }
+.filter-grid label, .route-filters label {
+  display: inline-flex; gap: 5px; align-items: center;
+  border: 1px solid var(--border); border-radius: 999px; padding: 5px 8px; background: #fbfaf7;
+  user-select: none;
+}
+#map { flex: 1 1 auto; min-height: 390px; width: 100%; border-radius: 14px; border: 1px solid var(--border); background: #e9e5dc; }
+.route-filters, .map-legend, .timeline-legend { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 8px; color: var(--muted); font-size: .76rem; }
+.route-filters { margin-top: 10px; }
+.legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 12px; height: 12px; border-radius: 4px; border: 1px solid rgba(0,0,0,.12); display: inline-block; }
+.site-marker { border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.26), 0 2px 8px rgba(0,0,0,.34); transition: transform .16s, opacity .16s, box-shadow .16s; position: relative; }
+.site-marker.is-dim { opacity: .12; transform: scale(.78); }
+.site-marker.is-match { opacity: 1; transform: scale(1.44); box-shadow: 0 0 0 3px rgba(255,255,255,.96), 0 0 0 7px rgba(211,91,31,.25), 0 4px 18px rgba(0,0,0,.4); z-index: 800 !important; }
+.site-marker.is-selected { transform: scale(1.6); box-shadow: 0 0 0 3px #fff, 0 0 0 8px rgba(131,103,199,.36), 0 6px 20px rgba(0,0,0,.42); }
+.area-tooltip { font-size: .78rem; line-height: 1.3; }
+.route-arrow { background: transparent; border: none; }
+.route-arrow-shape { font-size: 17px; line-height: 1; transform-origin: center; text-shadow: 0 1px 3px rgba(255,255,255,.95), 0 0 8px rgba(255,255,255,.9); font-weight: 800; }
+.empty-panel { color: var(--muted); }
+.site-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.site-title h2 { font-size: 1.18rem; line-height: 1.18; }
+.pill { display: inline-block; padding: 3px 8px; border-radius: 999px; color: #fff; font-size: .72rem; font-weight: 700; margin-bottom: 8px; }
+.site-image-wrap { margin: 0 0 12px; }
+.site-image { width: 100%; max-height: 285px; object-fit: cover; border-radius: 14px; border: 1px solid var(--border); display: block; background: #ece7db; }
+.image-placeholder { border: 1px dashed #c9bca6; background: #f4efe6; border-radius: 14px; min-height: 160px; display: grid; place-items: center; color: #806b4d; text-align: center; padding: 18px; }
+.photo-credit, .source-note { font-size: .72rem; color: var(--muted); margin-top: 6px; }
+.panel-meta { display: grid; gap: 8px; font-size: .87rem; }
+.panel-meta div { border-top: 1px solid #ebe4d8; padding-top: 7px; }
+.panel-note { margin-top: 10px; color: #4f4a42; font-size: .84rem; }
+.tag-row, .photo-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.tag-chip, .photo-links a { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; border: 1px solid #d7c8ad; background: #fff9ee; padding: 4px 8px; color: #6d4c1e; text-decoration: none; font-size: .75rem; font-weight: 700; }
+.taxonomy-note { margin-top: 10px; background: #f5eee2; border-left: 4px solid #cfa35d; border-radius: 10px; padding: 8px 10px; color: #5c4d3a; font-size: .82rem; }
+#timeline-wrap { position: relative; overflow-x: auto; overflow-y: hidden; border: 1px solid var(--border); border-radius: 14px; background: #fff; }
+.timeline { display: block; min-width: 980px; width: 100%; }
+.timeline-row { cursor: pointer; }
+.timeline-row:focus .bar, .timeline-row:hover .bar, .timeline-row.is-active .bar { filter: brightness(1.08) drop-shadow(0 2px 5px rgba(0,0,0,.25)); }
+.row-bg { fill: #fafafa; }
+.row-bg.alt { fill: #f2efe8; }
+.row-bg.active { fill: rgba(211,91,31,.11); }
+.grid-line { stroke: #ddd; stroke-width: 1; shape-rendering: crispEdges; }
+.axis-label { font-size: 10px; fill: #555; }
+.row-label { font-size: 10.3px; fill: #2d2924; dominant-baseline: middle; }
+.row-label.cat { font-weight: 800; fill: #5a4a3a; }
+.bar { stroke: rgba(0,0,0,.16); stroke-width: .5; }
+.highlight-band { fill: rgba(241,130,80,.18); stroke: #d35b1f; stroke-width: 1.5; stroke-dasharray: 4 3; pointer-events: none; opacity: 0; }
+.highlight-band.active { opacity: 1; }
+.highlight-label { fill: #d35b1f; font-size: 11px; font-weight: 800; pointer-events: none; opacity: 0; }
+.highlight-label.active { opacity: 1; }
+.selection-summary { margin-top: 8px; color: var(--muted); font-size: .82rem; }
+.tip { position: fixed; pointer-events: none; background: rgba(34,34,34,.96); color: #fff; padding: 10px 12px; border-radius: 10px; max-width: 320px; font-size: .82rem; line-height: 1.35; box-shadow: 0 8px 22px rgba(0,0,0,.25); opacity: 0; transform: translate(-50%, -100%); transition: opacity .12s; z-index: 9999; }
+.tip.show { opacity: 1; }
+.tip strong { display: block; color: #ffd28a; margin-bottom: 4px; }
+.tip.timeline-anchored { transform: none; }
+.site-footer { text-align: center; color: var(--muted); font-size: .78rem; padding: 12px 16px 22px; }
+@media (max-width: 1150px) {
+  .app-shell { grid-template-columns: 1fr; grid-template-rows: auto auto auto auto; grid-template-areas: "toolbar" "map" "panel" "timeline"; }
+  .site-panel { max-height: none; }
+  #map { min-height: 430px; height: 52vh; }
+}
+@media (max-width: 760px) {
+  .site-header { padding: 16px; }
+  .header-copy { font-size: .86rem; }
+  .app-shell { padding: 10px; gap: 10px; }
+  .toolbar-card { align-items: stretch; }
+  .mode-tabs, .filter-grid { width: 100%; }
+  .mode-tab { flex: 1 1 calc(50% - 4px); }
+  .filter-grid label { flex: 1 1 100%; }
+  .card { border-radius: 14px; }
+  .map-card, .site-panel, .timeline-card { padding: 10px; }
+  #map { height: 48vh; min-height: 330px; }
+  .site-image { max-height: 220px; }
+  .timeline { min-width: 880px; }
+  body[data-mode="mapa"] [data-panel="cronologia"],
+  body[data-mode="mapa"] [data-panel="yacimientos"] { display: none; }
+  body[data-mode="cronologia"] [data-panel="mapa"],
+  body[data-mode="cronologia"] [data-panel="yacimientos"] { display: none; }
+  body[data-mode="yacimientos"] [data-panel="mapa"],
+  body[data-mode="yacimientos"] [data-panel="cronologia"] { display: none; }
+  body[data-mode="especies"] [data-panel="yacimientos"] { display: none; }
+  body[data-mode="especies"] #site-panel { display: none; }
+}
+
+  </style>
 </head>
 <body data-mode="mapa">
   <header class="site-header">
@@ -76,14 +235,1988 @@
   </footer>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script src="js/data-timeline.js"></script>
-  <script src="js/data-sites.js"></script>
-  <script src="js/data-areas.js"></script>
-  <script src="js/data-routes.js"></script>
-  <script src="js/utils.js"></script>
-  <script src="js/site-panel.js"></script>
-  <script src="js/map.js"></script>
-  <script src="js/timeline.js"></script>
-  <script src="js/app.js"></script>
+  <script>
+/* ===== js/data-timeline.js ===== */
+window.ARCH_DATA = window.ARCH_DATA || {};
+window.ARCH_DATA.ROW_CATEGORIES = [
+    { id: "era",       label: "Eras geológicas",      color: "#8b6f4e" },
+    { id: "paleo",     label: "Períodos paleolíticos", color: "#e89249" },
+    { id: "hominino",  label: "Homínidos",            color: "#8367c7" },
+    { id: "cultura",   label: "Culturas líticas",     color: "#4a7e6e" }
+  ];
+
+window.ARCH_DATA.TIMELINE_ROWS = [
+    // === Eras geológicas ===
+    { name: "Plioceno", from: -5300000, to: -2600000, category: "era",
+      color: "var(--c-plioceno)",
+      details: "Época geológica previa al Pleistoceno. Conformación de la falla del Rift, cambios climáticos en África y aparición de los primeros homínidos como Australopithecus.",
+      cultura: "—" },
+
+    { name: "Transición Plio-Pleistoceno", from: -2800000, to: -2400000, category: "era",
+      color: "var(--c-transicion)",
+      details: "Periodo de cambios ecológicos significativos: expansión de sabanas y aridificación. Origen del Olduvayense como respuesta adaptativa y evolución del género Homo.",
+      cultura: "Olduvayense (Modo 1)" },
+
+    { name: "Pleistoceno", from: -2600000, to: -10000, category: "era",
+      color: "var(--c-pleistoceno)",
+      details: "Era de las glaciaciones; gran desarrollo del género Homo. Se divide en Inferior, Medio y Superior.",
+      cultura: "Olduvayense, Achelense, Musteriense, Paleolítico Superior" },
+
+    { name: "Pleistoceno Inferior", from: -2600000, to: -780000, category: "era",
+      color: "var(--c-pleistoceno-inferior)",
+      details: "Surgimiento del género Homo y primera salida de África.",
+      cultura: "Olduvayense (Modo 1), Achelense temprano (África)" },
+
+    { name: "Pleistoceno Medio", from: -780000, to: -130000, category: "era",
+      color: "var(--c-pleistoceno-medio)",
+      details: "Periodo de Homo heidelbergensis y formas arcaicas de Neandertal.",
+      cultura: "Achelense (Modo 2), Musteriense inicial" },
+
+    { name: "Pleistoceno Superior", from: -130000, to: -10000, category: "era",
+      color: "var(--c-pleistoceno-superior)",
+      details: "Apogeo y extinción de los Neandertales; expansión de Homo sapiens.",
+      cultura: "Musteriense, Chatelperroniense, Auriñaciense, Gravetiense, Solutrense, Magdaleniense" },
+
+    // === Períodos paleolíticos ===
+    { name: "Paleolítico Inferior", from: -2600000, to: -250000, category: "paleo",
+      color: "var(--c-paleolitico)",
+      details: "Comprende las industrias Olduvayense y Achelense; desarrollo de los primeros utensilios líticos por Homo habilis, ergaster y erectus.",
+      cultura: "Olduvayense, Achelense" },
+
+    { name: "Paleolítico Medio", from: -300000, to: -30000, category: "paleo",
+      color: "var(--c-paleolitico)",
+      details: "Dominio de la cultura Musteriense; preparación de núcleos Levallois; principalmente Neandertales y primeros Homo sapiens.",
+      cultura: "Musteriense (Modo 3)" },
+
+    { name: "Paleolítico Superior", from: -40000, to: -10000, category: "paleo",
+      color: "var(--c-paleolitico)",
+      details: "Explosión del arte rupestre, industria laminar y herramientas compuestas.",
+      cultura: "Auriñaciense, Gravetiense, Solutrense, Magdaleniense" },
+
+    // === Homínidos ===
+    { name: "Australopithecus anamensis", from: -4200000, to: -3900000, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Hominino bípedo incipiente; ancestro probable de A. afarensis.",
+      cultura: "No se asocia a industria lítica" },
+
+    { name: "Australopithecus afarensis", from: -3900000, to: -2900000, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Incluye el ejemplar 'Lucy'. Bipedismo asentado pero con hábitos arbóreos. Marcas de corte en huesos en Dikika.",
+      cultura: "Lomekwiense (posiblemente)" },
+
+    { name: "Kenyanthropus platyops", from: -3500000, to: -3300000, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Contemporáneo a A. afarensis; cara plana y rasgos dentales reducidos.",
+      cultura: "Lomekwiense (mencionado en Lomekwi)" },
+
+    { name: "Australopithecus africanus", from: -3000000, to: -2200000, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Australopiteco grácil de Sudáfrica; incluye el Niño de Taung.",
+      cultura: "Industria osteodontoquerática (propuesta por Dart, desmentida)" },
+
+    { name: "Paranthropus aethiopicus", from: -2800000, to: -2300000, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Primer miembro reconocible de los parántropos; australopiteco robusto temprano. Incluye el 'Black Skull'.",
+      cultura: "—" },
+
+    { name: "Homo habilis", from: -2500000, to: -1400000, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Primer fabricante conocido de útiles de piedra. Cerebro de ~550–680 cm³; dentición reducida.",
+      cultura: "Olduvayense" },
+
+    { name: "Homo rudolfensis", from: -2400000, to: -1700000, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Cerebro mayor (~750 cm³) y cara larga y más plana que H. habilis.",
+      cultura: "Olduvayense" },
+
+    { name: "Paranthropus boisei", from: -2200000, to: -1000000, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Desarrolló grandes molares y aparato masticador potente.",
+      cultura: "—" },
+
+    { name: "Homo ergaster / Homo erectus", from: -1800000, to: -100000, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Primera salida de África (~1,9 Ma); cráneos robustos, proporciones humanas; cerebro >800–850 cm³.",
+      cultura: "Olduvayense y Achelense" },
+
+    { name: "Homo heidelbergensis / H. rhodesiensis", from: -600000, to: -200000, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Pobladores de la Sima de los Huesos; ancestros de neandertales. Posible capacidad de lenguaje articulado y lanzas de madera (Schöningen).",
+      cultura: "Achelense (Modo 2), Musteriense inicial" },
+
+    { name: "Hombre de Denisova", from: -200000, to: -30000, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Linaje hermano de los neandertales identificado por ADN antiguo en la cueva de Denisova (Siberia). Hibridación con Homo sapiens.",
+      cultura: "—" },
+
+    { name: "Homo neanderthalensis", from: -350000, to: -28000, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Adaptado a climas fríos de Eurasia. Capacidad craneal ~1450 cm³; uso de brea de abedul.",
+      cultura: "Musteriense (Modo 3) y Chatelperroniense" },
+
+    { name: "Homo sapiens", from: -300000, to: 0, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Humanos anatómicamente modernos. Comportamiento simbólico complejo, arte narrativo y simbolismo visual.",
+      cultura: "Middle Stone Age, Musteriense inicial, Industria Laminar, Paleolítico Superior" },
+
+    // === Culturas ===
+    { name: "Industria Lomekwiense", from: -3300000, to: -2600000, category: "cultura",
+      color: "var(--c-cultura)",
+      details: "Herramientas de piedra más antiguas conocidas, halladas en Kenia.",
+      cultura: "Kenyanthropus platyops (presunto)" },
+
+    { name: "Modo 1 · Cultura Olduvayense", from: -2600000, to: -1500000, category: "cultura",
+      color: "var(--c-cultura)",
+      details: "Tecnología de cantos tallados y lascas simples. Primeras herramientas de piedra; lascas cortantes y guijarros tallados.",
+      cultura: "Homo habilis, Australopithecus garhi" },
+
+    { name: "Modo 2 · Cultura Achelense", from: -1700000, to: -200000, category: "cultura",
+      color: "var(--c-cultura)",
+      details: "Bifaces, grandes lascas y hachas de mano refinadas; simetría y planificación.",
+      cultura: "H. ergaster, H. erectus, H. heidelbergensis" },
+
+    { name: "Modo 3 · Cultura Musteriense", from: -300000, to: -30000, category: "cultura",
+      color: "var(--c-cultura)",
+      details: "Técnica Levallois; herramientas especializadas; preparación de núcleos para lascas estandarizadas.",
+      cultura: "H. neanderthalensis, H. sapiens (inicial)" }
+  ];
+
+
+window.ARCH_DATA.TIMELINE_ROWS.push(
+  { name: "Acheulo-Yabrudiense", from: -420000, to: -200000, category: "cultura", color: "#9a6a3a", details: "Complejo del Levante asociado a grandes lascas, raspadores y una transición tecnológica regional anterior al Paleolítico Medio levantino.", cultura: "Acheulo-Yabrudiense" },
+  { name: "Middle Stone Age africano", from: -300000, to: -30000, category: "cultura", color: "#4a7e6e", details: "Conjunto tecnológico africano con Levallois, puntas, pigmentos y evidencias tempranas de comportamiento simbólico en algunos sitios.", cultura: "Homo sapiens temprano y linajes africanos arcaicos" },
+  { name: "Chatelperroniense", from: -45000, to: -36000, category: "cultura", color: "#6f6f6f", details: "Industria transicional europea asociada en parte a neandertales; su interpretación sigue siendo discutida.", cultura: "Neandertales; transición al Paleolítico Superior" },
+  { name: "Auriñaciense", from: -43000, to: -28000, category: "cultura", color: "#4f83cc", details: "Industria del Paleolítico Superior temprano asociada a Homo sapiens en Europa, con arte mueble, industria ósea y tecnologías laminares.", cultura: "Homo sapiens" },
+  { name: "Gravetiense / Pavloviense", from: -33000, to: -22000, category: "cultura", color: "#4f83cc", details: "Complejo del Paleolítico Superior con arte mueble, figurillas, tecnologías laminares y ocupaciones de Europa central y oriental.", cultura: "Homo sapiens" }
+);
+
+(function enrichTimelineRows() {
+  const map = {
+    "Plioceno": { periodTags:["plioceno"], focus:"pre-sapiens" },
+    "Transición Plio-Pleistoceno": { periodTags:["plioceno","pleistoceno-inferior"], cultureTags:["olduvayense"], focus:"pre-sapiens" },
+    "Pleistoceno": { periodTags:["pleistoceno-inferior","pleistoceno-medio","pleistoceno-superior"], focus:"all" },
+    "Pleistoceno Inferior": { periodTags:["pleistoceno-inferior"], focus:"pre-sapiens" },
+    "Pleistoceno Medio": { periodTags:["pleistoceno-medio"], focus:"pre-sapiens" },
+    "Pleistoceno Superior": { periodTags:["pleistoceno-superior"], focus:"all" },
+    "Paleolítico Inferior": { cultureTags:["olduvayense","achelense","modo-1","modo-2"], periodTags:["pleistoceno-inferior","pleistoceno-medio"], focus:"pre-sapiens" },
+    "Paleolítico Medio": { cultureTags:["musteriense","levallois","middle-stone-age"], periodTags:["pleistoceno-medio","pleistoceno-superior"], focus:"all" },
+    "Paleolítico Superior": { cultureTags:["aurinaciense","gravetiense","solutrense","magdaleniense","paleolitico-superior"], periodTags:["pleistoceno-superior"], focus:"upper-paleolithic" },
+    "Australopithecus anamensis": { speciesTags:["australopithecus-anamensis"], focus:"pre-sapiens" },
+    "Australopithecus afarensis": { speciesTags:["australopithecus-afarensis"], focus:"pre-sapiens" },
+    "Kenyanthropus platyops": { speciesTags:["kenyanthropus-platyops"], cultureTags:["lomekwiense"], focus:"pre-sapiens" },
+    "Australopithecus africanus": { speciesTags:["australopithecus-africanus"], focus:"pre-sapiens" },
+    "Paranthropus aethiopicus": { speciesTags:["paranthropus-aethiopicus"], focus:"pre-sapiens" },
+    "Homo habilis": { speciesTags:["homo-habilis","homo-temprano"], cultureTags:["olduvayense"], focus:"pre-sapiens" },
+    "Homo rudolfensis": { speciesTags:["homo-rudolfensis","homo-temprano"], cultureTags:["olduvayense"], focus:"pre-sapiens" },
+    "Paranthropus boisei": { speciesTags:["paranthropus-boisei"], focus:"pre-sapiens" },
+    "Homo ergaster / Homo erectus": { speciesTags:["homo-ergaster","homo-erectus"], cultureTags:["olduvayense","achelense"], routeTags:["route-erectus"], focus:"pre-sapiens" },
+    "Homo heidelbergensis / H. rhodesiensis": { speciesTags:["homo-heidelbergensis","homo-rhodesiensis"], cultureTags:["achelense"], routeTags:["route-heidelbergensis"], focus:"pre-sapiens" },
+    "Hombre de Denisova": { speciesTags:["denisovanos","hombre-de-denisova"], routeTags:["route-denisovans"], focus:"pre-sapiens" },
+    "Homo neanderthalensis": { speciesTags:["homo-neanderthalensis","neandertales"], cultureTags:["musteriense","chatelperroniense"], routeTags:["route-neanderthals"], focus:"pre-sapiens" },
+    "Homo sapiens": { speciesTags:["homo-sapiens"], cultureTags:["middle-stone-age","paleolitico-superior"], focus:"sapiens-early" },
+    "Industria Lomekwiense": { cultureTags:["lomekwiense"], focus:"pre-sapiens" },
+    "Modo 1 · Cultura Olduvayense": { cultureTags:["olduvayense","modo-1"], focus:"pre-sapiens" },
+    "Modo 2 · Cultura Achelense": { cultureTags:["achelense","modo-2"], focus:"pre-sapiens" },
+    "Modo 3 · Cultura Musteriense": { cultureTags:["musteriense","modo-3","levallois"], focus:"pre-sapiens" },
+    "Acheulo-Yabrudiense": { cultureTags:["acheulo-yabrudiense"], speciesTags:["homo-sp"], periodTags:["pleistoceno-medio"], focus:"pre-sapiens" },
+    "Middle Stone Age africano": { cultureTags:["middle-stone-age"], speciesTags:["homo-sapiens"], periodTags:["pleistoceno-medio","pleistoceno-superior"], focus:"sapiens-early" },
+    "Chatelperroniense": { cultureTags:["chatelperroniense"], speciesTags:["homo-neanderthalensis","neandertales"], periodTags:["pleistoceno-superior"], focus:"pre-sapiens" },
+    "Auriñaciense": { cultureTags:["aurinaciense","paleolitico-superior"], speciesTags:["homo-sapiens"], periodTags:["pleistoceno-superior"], focus:"upper-paleolithic" },
+    "Gravetiense / Pavloviense": { cultureTags:["gravetiense","paleolitico-superior"], speciesTags:["homo-sapiens"], periodTags:["pleistoceno-superior"], focus:"upper-paleolithic" }
+  };
+  window.ARCH_DATA.TIMELINE_ROWS.forEach((row, index) => {
+    const extra = map[row.name] || {};
+    row.id = row.id || `row-${index}-${row.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+    row.periodTags = extra.periodTags || [];
+    row.speciesTags = extra.speciesTags || [];
+    row.cultureTags = extra.cultureTags || [];
+    row.routeTags = extra.routeTags || [];
+    row.focus = extra.focus || "all";
+  });
+})();
+
+
+/* ===== js/data-sites.js ===== */
+window.ARCH_DATA = window.ARCH_DATA || {};
+window.ARCH_DATA.SITES = [
+    {
+        "name": "Dmanisi",
+        "country": "República de Georgia",
+        "lat": 41.336,
+        "lng": 44.207,
+        "group": "Pleistoceno Inferior",
+        "periodo": "Pleistoceno Inferior (~1,77–1,85 Ma)",
+        "from": -1850000,
+        "to": -1770000,
+        "species": "Homo erectus / Homo georgicus",
+        "culture": "Olduvayense / Modo 1",
+        "hallazgos": "Cráneos D2280, D2282, D2700, D3444, mandíbulas, restos postcraneales y herramientas líticas de Modo 1.",
+        "excavacion": "Descubrimientos homininos desde 1991; excavaciones sistemáticas en los años 1990–actualidad.",
+        "investigadores": "Leo Gabunia, Abesalom Vekua, David Lordkipanidze y equipo.",
+        "datos": "Una de las evidencias más tempranas de homininos fuera de África y clave para Out of Africa I.",
+        "img": "https://humanorigins.si.edu/sites/default/files/styles/full_width/public/images/landscape/erectus_D3444_skull_jddh_3qtr_l.jpg.webp?itok=EKItuwTf",
+        "imgCredit": "Smithsonian Institution · Human Origins Program",
+        "source": "https://humanorigins.si.edu/evidence/human-fossils/fossils/d3444"
+    },
+    {
+        "name": "Orozmani",
+        "country": "República de Georgia",
+        "lat": 41.395,
+        "lng": 44.335,
+        "group": "Pleistoceno Inferior",
+        "periodo": "Pleistoceno Inferior (~1,8 Ma, datación en revisión)",
+        "from": -1850000,
+        "to": -1750000,
+        "species": "Homo erectus sensu lato",
+        "culture": "Modo 1",
+        "hallazgos": "Diente y mandíbula hominina, industria lítica y fauna pleistocena.",
+        "excavacion": "Campañas recientes desde 2019–2020.",
+        "investigadores": "Giorgi Bidzinashvili y equipo georgiano.",
+        "datos": "Sitio cercano a Dmanisi que sugiere una presencia hominina más extensa en el Cáucaso temprano.",
+        "source": "https://humanorigins.si.edu/evidence/human-fossils/fossils/d2282",
+        "img": "https://commons.wikimedia.org/wiki/Special:FilePath/Night%20Excavations.jpg?width=640",
+        "imgCredit": "Coilx005 · Wikimedia Commons",
+        "imgSource": "https://commons.wikimedia.org/wiki/File:Night_Excavations.jpg",
+        "externalPhotos": [
+            {
+                "label": "Fotos en Google Maps",
+                "url": "https://www.google.com/maps/search/?api=1&query=Kvemo%20Orozmani%20archaeological%20site%20Georgia"
+            }
+        ]
+    },
+    {
+        "name": "Sierra de Atapuerca · Gran Dolina",
+        "country": "España",
+        "lat": 42.353,
+        "lng": -3.518,
+        "group": "Pleistoceno Inferior",
+        "periodo": "Pleistoceno Inferior (~0,85–0,78 Ma)",
+        "from": -900000,
+        "to": -780000,
+        "species": "Homo antecessor",
+        "culture": "Modo 1 / transición europea temprana",
+        "hallazgos": "Restos de Homo antecessor en TD6, industria lítica y fauna con marcas de corte.",
+        "excavacion": "Hallazgos clave desde 1994; excavación moderna continuada.",
+        "investigadores": "Eudald Carbonell, J. L. Arsuaga, J. M. Bermúdez de Castro y equipo.",
+        "datos": "Sitio central para la primera ocupación humana de Europa occidental.",
+        "img": "https://whc.unesco.org/document/127489",
+        "imgCredit": "UNESCO / Instituto del Patrimonio Cultural de España",
+        "source": "https://www.atapuerca.org/en/apartado/1989/sierra-de-atapuerca-sites"
+    },
+    {
+        "name": "Sierra de Atapuerca · Sima de los Huesos",
+        "country": "España",
+        "lat": 42.355,
+        "lng": -3.521,
+        "group": "Pleistoceno Medio",
+        "periodo": "Pleistoceno Medio (~430 ka)",
+        "from": -500000,
+        "to": -400000,
+        "species": "H. heidelbergensis / linaje neandertal temprano",
+        "culture": "Achelense / comportamiento funerario debatido",
+        "hallazgos": "Más de 5.000 restos humanos de al menos 28 individuos, restos de oso y bifaz “Excalibur”.",
+        "excavacion": "Trabajos desde 1976; hallazgos mayores desde los años 1980–1990.",
+        "investigadores": "Emiliano Aguirre, Juan Luis Arsuaga y equipo.",
+        "datos": "Clave para el estudio del linaje neandertal y la acumulación intencional de cadáveres, todavía discutida.",
+        "img": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/Homo_heidelbergensis_-_Cranium_-_Cave_Mayor_of_Atapuerca_%28Spain%29_-_Cast_-_01.jpg/640px-Homo_heidelbergensis_-_Cranium.jpg",
+        "imgCredit": "Imagen de referencia / Wikimedia Commons",
+        "source": "https://whc.unesco.org/en/list/989/"
+    },
+    {
+        "name": "Barranco León y Fuentenueva 3 · Orce",
+        "country": "España",
+        "lat": 37.738,
+        "lng": -2.717,
+        "group": "Pleistoceno Inferior",
+        "periodo": "Pleistoceno Inferior (~1,2–1,4 Ma)",
+        "from": -1400000,
+        "to": -1200000,
+        "species": "Homo sp.",
+        "culture": "Modo 1",
+        "hallazgos": "Industria lítica, fauna procesada y evidencias de presencia humana temprana en Europa occidental.",
+        "excavacion": "Prospecciones y excavaciones desde los años 1980; campañas sistemáticas posteriores.",
+        "investigadores": "Josep Gibert y equipos posteriores de Orce.",
+        "datos": "Complementa Atapuerca para la discusión sobre las primeras entradas humanas en Europa.",
+        "img": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3d/Yacimiento_Barranco_Le%C3%B3n.jpg/640px-Yacimiento_Barranco_Le%C3%B3n.jpg",
+        "imgCredit": "Imagen de referencia / Wikimedia Commons"
+    },
+    {
+        "name": "Sterkfontein",
+        "country": "Sudáfrica",
+        "lat": -26.016,
+        "lng": 27.733,
+        "group": "Plioceno",
+        "periodo": "Plio-Pleistoceno (~3,7–2,0 Ma)",
+        "from": -3700000,
+        "to": -2000000,
+        "species": "Australopithecus africanus",
+        "culture": "Sin industria lítica segura",
+        "hallazgos": "“Mrs. Ples”, esqueleto “Little Foot” y numerosos restos de australopitecos.",
+        "excavacion": "Desde la década de 1930; Little Foot descubierto en 1994.",
+        "investigadores": "Robert Broom, John T. Robinson, Phillip Tobias, Ronald Clarke.",
+        "datos": "Sitio clave del Cradle of Humankind para el bipedismo y la diversidad australopitecina.",
+        "source": "https://whc.unesco.org/en/list/915/",
+        "img": "https://commons.wikimedia.org/wiki/Special:FilePath/Sterfontein%20grotte%20ingang.jpg?width=640",
+        "imgCredit": "Anrie · Wikimedia Commons",
+        "imgSource": "https://commons.wikimedia.org/wiki/File:Sterfontein_grotte_ingang.jpg",
+        "externalPhotos": [
+            {
+                "label": "Fotos en Google Maps",
+                "url": "https://www.google.com/maps/search/?api=1&query=Sterkfontein%20Caves%20Cradle%20of%20Humankind"
+            }
+        ]
+    },
+    {
+        "name": "Swartkrans",
+        "country": "Sudáfrica",
+        "lat": -25.995,
+        "lng": 27.729,
+        "group": "Pleistoceno Inferior",
+        "periodo": "Pleistoceno Inferior (~2,0–1,0 Ma)",
+        "from": -2000000,
+        "to": -1000000,
+        "species": "Paranthropus robustus; Homo ergaster/erectus temprano",
+        "culture": "Olduvayense / uso temprano del fuego debatido",
+        "hallazgos": "Restos de P. robustus, Homo temprano, herramientas de hueso y piedra, huesos quemados.",
+        "excavacion": "Desde 1948; excavaciones de Brain en los años 1960–1980.",
+        "investigadores": "Robert Broom, C. K. Brain y equipo.",
+        "datos": "Fundamental para discutir coexistencia de Homo y Paranthropus en Sudáfrica.",
+        "source": "https://whc.unesco.org/en/list/915/",
+        "img": "https://commons.wikimedia.org/wiki/Special:FilePath/Original%20of%20Paranthropus%20robustus%20Face.jpg?width=640",
+        "imgCredit": "José Braga / Didier Descouens · Wikimedia Commons",
+        "imgSource": "https://commons.wikimedia.org/wiki/File:Original_of_Paranthropus_robustus_Face.jpg",
+        "externalPhotos": [
+            {
+                "label": "Fotos en Google Maps",
+                "url": "https://www.google.com/maps/search/?api=1&query=Swartkrans%20archaeological%20site%20South%20Africa"
+            }
+        ]
+    },
+    {
+        "name": "Rising Star · Dinaledi Chamber",
+        "country": "Sudáfrica",
+        "lat": -26.016,
+        "lng": 27.7,
+        "group": "Pleistoceno Medio",
+        "periodo": "Pleistoceno Medio (~335–236 ka)",
+        "from": -335000,
+        "to": -236000,
+        "species": "Homo naledi",
+        "culture": "Sin industria inequívoca asociada",
+        "hallazgos": "Más de 1.550 fósiles de al menos 15 individuos de Homo naledi.",
+        "excavacion": "2013 y 2014; publicaciones desde 2015.",
+        "investigadores": "Lee Berger, John Hawks, Marina Elliott y equipo.",
+        "datos": "Sitio clave para la diversidad tardía del género Homo en África austral.",
+        "source": "https://humanorigins.si.edu/evidence/human-fossils/species/homo-naledi",
+        "img": "https://commons.wikimedia.org/wiki/Special:FilePath/Homo%20naledi%20LES1%20cranium.jpg?width=640",
+        "imgCredit": "Hawks et al. / eLife · Wikimedia Commons · CC BY 4.0",
+        "imgSource": "https://commons.wikimedia.org/wiki/File:Homo_naledi_LES1_cranium.jpg",
+        "externalPhotos": [
+            {
+                "label": "National Geographic",
+                "url": "https://www.nationalgeographic.org/society/our-programs/rising-star/"
+            },
+            {
+                "label": "Fotos en Google Maps",
+                "url": "https://www.google.com/maps/search/?api=1&query=Rising%20Star%20Cave%20Dinaledi%20Chamber%20South%20Africa"
+            }
+        ]
+    },
+    {
+        "name": "Malapa",
+        "country": "Sudáfrica",
+        "lat": -25.889,
+        "lng": 27.766,
+        "group": "Pleistoceno Inferior",
+        "periodo": "Pleistoceno Inferior (~1,98 Ma)",
+        "from": -2000000,
+        "to": -1900000,
+        "species": "Australopithecus sediba",
+        "culture": "Sin industria segura",
+        "hallazgos": "Esqueletos parciales MH1 y MH2 de Australopithecus sediba.",
+        "excavacion": "Descubrimiento en 2008; excavación posterior.",
+        "investigadores": "Lee Berger y equipo.",
+        "datos": "Importante para el debate sobre la transición Australopithecus–Homo.",
+        "source": "https://humanorigins.si.edu/evidence/human-fossils/species/australopithecus-sediba",
+        "img": "https://commons.wikimedia.org/wiki/Special:FilePath/Australopithecus%20sediba.JPG?width=640",
+        "imgCredit": "Didier Descouens · Wikimedia Commons",
+        "imgSource": "https://commons.wikimedia.org/wiki/File:Australopithecus_sediba.JPG",
+        "externalPhotos": [
+            {
+                "label": "National Geographic",
+                "url": "https://www.nationalgeographic.org/society/our-programs/rising-star/"
+            },
+            {
+                "label": "Fotos en Google Maps",
+                "url": "https://www.google.com/maps/search/?api=1&query=Malapa%20fossil%20site%20Cradle%20of%20Humankind%20South%20Africa"
+            }
+        ]
+    },
+    {
+        "name": "Taung",
+        "country": "Sudáfrica",
+        "lat": -27.553,
+        "lng": 24.785,
+        "group": "Pleistoceno Inferior",
+        "periodo": "Plio-Pleistoceno (~2,8–2,3 Ma)",
+        "from": -2800000,
+        "to": -2300000,
+        "species": "Australopithecus africanus",
+        "culture": "Sin industria lítica segura",
+        "hallazgos": "Cráneo infantil “Niño de Taung”, holotipo de A. africanus.",
+        "excavacion": "Descubrimiento en 1924.",
+        "investigadores": "Raymond Dart.",
+        "datos": "Primer australopiteco reconocido y punto de inflexión en la paleoantropología africana.",
+        "img": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/Taung_child_skull.jpg/640px-Taung_child_skull.jpg",
+        "imgCredit": "Imagen de referencia / Wikimedia Commons"
+    },
+    {
+        "name": "Lomekwi · Lago Turkana",
+        "country": "Kenia",
+        "lat": 4.108,
+        "lng": 35.847,
+        "group": "Plioceno",
+        "periodo": "Plioceno (~3,3 Ma)",
+        "from": -3300000,
+        "to": -3260000,
+        "species": "Kenyanthropus platyops / hominino no determinado",
+        "culture": "Lomekwiense",
+        "hallazgos": "Núcleos, lascas y yunques anteriores al Olduvayense.",
+        "excavacion": "Descubrimientos publicados en 2015.",
+        "investigadores": "Sonia Harmand, Jason Lewis y equipo.",
+        "datos": "Amplía la tecnología lítica más allá del género Homo.",
+        "source": "https://www.nature.com/articles/nature14464",
+        "externalPhotos": [
+            {
+                "label": "National Geographic",
+                "url": "https://www.nationalgeographic.com/history/article/150416-oldest-stone-tools-archaeology-kenya-human-origins-evolution"
+            },
+            {
+                "label": "Fotos del proyecto",
+                "url": "https://africanfossils.org/excavations"
+            },
+            {
+                "label": "Fotos en Google Maps",
+                "url": "https://www.google.com/maps/search/?api=1&query=Lomekwi%203%20Lake%20Turkana%20Kenya"
+            }
+        ]
+    },
+    {
+        "name": "Kanapoi y Allia Bay",
+        "country": "Kenia",
+        "lat": 2.327,
+        "lng": 36.072,
+        "group": "Plioceno",
+        "periodo": "Plioceno (4,2–3,9 Ma)",
+        "from": -4200000,
+        "to": -3900000,
+        "species": "Australopithecus anamensis",
+        "culture": "Sin industria lítica segura",
+        "hallazgos": "Mandíbula KNM-KP 29281, tibia y dentición de A. anamensis.",
+        "excavacion": "Hallazgos principales en 1994–1995.",
+        "investigadores": "Meave Leakey y equipo.",
+        "datos": "Base para la definición de A. anamensis y evidencias tempranas de bipedismo.",
+        "source": "https://humanorigins.si.edu/evidence/human-fossils/species/australopithecus-anamensis",
+        "img": "https://commons.wikimedia.org/wiki/Special:FilePath/Australopithecus%20anamensis%20bone%20%28University%20of%20Zurich%29.JPG?width=640",
+        "imgCredit": "Guérin Nicolas · Wikimedia Commons",
+        "imgSource": "https://commons.wikimedia.org/wiki/File:Australopithecus_anamensis_bone_(University_of_Zurich).JPG",
+        "externalPhotos": [
+            {
+                "label": "Fotos en Google Maps",
+                "url": "https://www.google.com/maps/search/?api=1&query=Kanapoi%20Allia%20Bay%20Turkana%20Kenya%20archaeological%20site"
+            }
+        ]
+    },
+    {
+        "name": "Hadar",
+        "country": "Etiopía",
+        "lat": 11.124,
+        "lng": 40.572,
+        "group": "Plioceno",
+        "periodo": "Plioceno (3,7–3,0 Ma)",
+        "from": -3700000,
+        "to": -3000000,
+        "species": "Australopithecus afarensis",
+        "culture": "Sin industria segura; relación debatida con marcas de corte regionales",
+        "hallazgos": "AL 288-1 “Lucy” y AL 333 “Primera Familia”.",
+        "excavacion": "1974–1975; campañas posteriores.",
+        "investigadores": "Donald Johanson, Maurice Taieb, Yves Coppens y equipo.",
+        "datos": "Sitio clave para bipedismo y variabilidad de A. afarensis.",
+        "img": "https://humanorigins.si.edu/sites/default/files/styles/full_width/public/afarensis_AL288_1_skeleton_CC_rt_3qtr_p_0.jpg.webp?itok=jmMsPKzE",
+        "imgCredit": "Chip Clark / Smithsonian Institution",
+        "source": "https://humanorigins.si.edu/evidence/human-fossils/fossils/al-288-1"
+    },
+    {
+        "name": "Laetoli",
+        "country": "Tanzania",
+        "lat": -3.219,
+        "lng": 35.207,
+        "group": "Plioceno",
+        "periodo": "Plioceno (~3,66 Ma)",
+        "from": -3700000,
+        "to": -3600000,
+        "species": "Australopithecus afarensis",
+        "culture": "Huellas, no cultura lítica",
+        "hallazgos": "Rastros de pisadas fosilizadas en ceniza volcánica.",
+        "excavacion": "Descubrimiento y excavación principal en 1976–1978.",
+        "investigadores": "Mary Leakey y equipo.",
+        "datos": "Evidencia icónica de bipedismo habitual antes de Homo.",
+        "source": "https://humanorigins.si.edu/evidence/behavior/footprints/laetoli-footprint-trails",
+        "img": "https://lh3.googleusercontent.com/ci/AL18g_TAAmnuTE6EcYQIbTI-fVwrsUsTd2_aFEOzkgYmEWQyGqkEgIdiqBPugNOcDNTxQZU-AOZlMA",
+        "imgCredit": "Smithsonian / Google Arts & Culture"
+    },
+    {
+        "name": "Dikika",
+        "country": "Etiopía",
+        "lat": 11.108,
+        "lng": 40.594,
+        "group": "Plioceno",
+        "periodo": "Plioceno (~3,4 Ma)",
+        "from": -3450000,
+        "to": -3350000,
+        "species": "Australopithecus afarensis",
+        "culture": "Uso de piedra debatido",
+        "hallazgos": "Huesos de ungulados con marcas de corte; fósil infantil DIK-1-1 “Selam”.",
+        "excavacion": "DIK-1-1 descubierto en 2000; marcas de corte publicadas en 2010.",
+        "investigadores": "Zeresenay Alemseged y equipo.",
+        "datos": "Importante para la discusión sobre procesamiento de carne antes de Homo.",
+        "img": "https://humanorigins.si.edu/sites/default/files/styles/full_width/public/afarensis_AL288_1_skeleton_CC_rt_3qtr_p_0.jpg.webp?itok=jmMsPKzE",
+        "imgCredit": "Chip Clark / Smithsonian Institution",
+        "source": "https://humanorigins.si.edu/evidence/human-fossils/fossils/al-288-1"
+    },
+    {
+        "name": "Aramis · Middle Awash",
+        "country": "Etiopía",
+        "lat": 10.5,
+        "lng": 40.5,
+        "group": "Plioceno",
+        "periodo": "Plioceno temprano (~4,4 Ma)",
+        "from": -4400000,
+        "to": -4300000,
+        "species": "Ardipithecus ramidus",
+        "culture": "Sin industria lítica segura",
+        "hallazgos": "Esqueleto parcial ARA-VP-6/500 “Ardi” y otros restos.",
+        "excavacion": "Descubrimientos desde 1992; publicación mayor en 2009.",
+        "investigadores": "Tim White, Gen Suwa, Berhane Asfaw y equipo.",
+        "datos": "Clave para reconstruir locomoción y ecología antes de Australopithecus.",
+        "source": "https://humanorigins.si.edu/evidence/human-fossils/fossils/ara-vp-6500",
+        "img": "https://commons.wikimedia.org/wiki/Special:FilePath/Ardi.jpg?width=640",
+        "imgCredit": "Reconstrucción visual · Wikimedia Commons",
+        "imgSource": "https://commons.wikimedia.org/wiki/File:Ardi.jpg",
+        "externalPhotos": [
+            {
+                "label": "Ficha Smithsonian",
+                "url": "https://humanorigins.si.edu/evidence/human-fossils/fossils/ara-vp-6500"
+            },
+            {
+                "label": "Fotos en Google Maps",
+                "url": "https://www.google.com/maps/search/?api=1&query=Aramis%20Middle%20Awash%20Ethiopia%20archaeology"
+            }
+        ]
+    },
+    {
+        "name": "Bouri",
+        "country": "Etiopía",
+        "lat": 10.255,
+        "lng": 40.547,
+        "group": "Plioceno",
+        "periodo": "Plio-Pleistoceno (~2,5 Ma)",
+        "from": -2550000,
+        "to": -2450000,
+        "species": "Australopithecus garhi",
+        "culture": "Posible uso de herramientas",
+        "hallazgos": "Cráneo BOU-VP 12/130 y huesos con marcas de corte.",
+        "excavacion": "Descubrimientos publicados en 1999.",
+        "investigadores": "Berhane Asfaw, Tim White y equipo.",
+        "datos": "Pieza importante en el debate sobre consumo de carne antes de Homo.",
+        "img": "https://commons.wikimedia.org/wiki/Special:FilePath/Resti%20di%20australopithecus%20garhi%2C%20da%20bouri%20in%20afar%2C%202%2C5%20milioni%20di%20anni%20fa.jpg?width=640",
+        "imgCredit": "Sailko · Wikimedia Commons",
+        "imgSource": "https://commons.wikimedia.org/wiki/File:Resti_di_australopithecus_garhi,_da_bouri_in_afar,_2,5_milioni_di_anni_fa.jpg",
+        "source": "https://humanorigins.si.edu/evidence/human-fossils/species/australopithecus-garhi",
+        "externalPhotos": [
+            {
+                "label": "Fotos en Google Maps",
+                "url": "https://www.google.com/maps/search/?api=1&query=Bouri%20Afar%20Ethiopia%20Australopithecus%20garhi%20site"
+            }
+        ]
+    },
+    {
+        "name": "Gona",
+        "country": "Etiopía",
+        "lat": 11.181,
+        "lng": 40.5,
+        "group": "Plioceno",
+        "periodo": "Plio-Pleistoceno (~2,6 Ma)",
+        "from": -2600000,
+        "to": -2500000,
+        "species": "Homo temprano / hominino no determinado",
+        "culture": "Olduvayense temprano",
+        "hallazgos": "Herramientas de piedra y huesos con marcas de corte.",
+        "excavacion": "Hallazgos clave publicados desde los años 1990; fósil con marcas descubierto en 2000.",
+        "investigadores": "Sileshi Semaw y colaboradores.",
+        "datos": "Entre las evidencias más antiguas de tecnología Oldowan y procesamiento de carcasas.",
+        "img": "https://humanorigins.si.edu/sites/default/files/styles/full_width/public/images/landscape/Cutmarked_Zebra_boneOG56-1_MB_Gona_SS_l.jpg.webp?itok=yXZ_vcBl",
+        "imgCredit": "Smithsonian Institution · Human Origins Program",
+        "source": "https://humanorigins.si.edu/evidence/behavior/getting-food/butchered-animal-bones-gona-ethiopia"
+    },
+    {
+        "name": "Koro Toro",
+        "country": "Chad",
+        "lat": 16.09,
+        "lng": 18.5,
+        "group": "Plioceno",
+        "periodo": "Plioceno (3,5–3,0 Ma)",
+        "from": -3500000,
+        "to": -3000000,
+        "species": "Australopithecus bahrelghazali",
+        "culture": "Sin industria lítica segura",
+        "hallazgos": "Mandíbula KT12/H1 “Abel”.",
+        "excavacion": "Descubrimiento en 1995.",
+        "investigadores": "Michel Brunet y equipo.",
+        "datos": "Amplió el mapa de australopitecos hacia África central-occidental.",
+        "source": "https://en.wikipedia.org/wiki/Australopithecus_bahrelghazali",
+        "externalPhotos": [
+            {
+                "label": "Fotos en Google Maps",
+                "url": "https://www.google.com/maps/search/?api=1&query=Koro%20Toro%20Chad%20fossil%20site%20Australopithecus%20bahrelghazali"
+            },
+            {
+                "label": "Búsqueda de imagen verificada",
+                "url": "https://www.google.com/search?tbm=isch&q=Australopithecus%20bahrelghazali%20Koro%20Toro%20fossil%20Abel"
+            }
+        ]
+    },
+    {
+        "name": "Olduvai / Oldupai Gorge",
+        "country": "Tanzania",
+        "lat": -2.987,
+        "lng": 35.355,
+        "group": "Pleistoceno Inferior",
+        "periodo": "Pleistoceno Inferior (~2,0–1,2 Ma)",
+        "from": -2000000,
+        "to": -1200000,
+        "species": "Homo habilis, Homo erectus/ergaster, Paranthropus boisei",
+        "culture": "Olduvayense y Achelense temprano",
+        "hallazgos": "OH 7, OH 5, industria Oldowan y Achelense, fauna procesada.",
+        "excavacion": "Exploraciones desde 1911; campañas Leakey desde los años 1930–1960.",
+        "investigadores": "Louis Leakey, Mary Leakey, Jonathan Leakey y equipos posteriores.",
+        "datos": "Sitio clásico para definir Oldowan y Homo habilis.",
+        "img": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/Olduvai_Gorge_02.jpg/640px-Olduvai_Gorge_02.jpg",
+        "imgCredit": "Imagen de referencia / Wikimedia Commons",
+        "source": "https://humanorigins.si.edu/evidence/human-fossils/fossils/knm-er-1813"
+    },
+    {
+        "name": "Koobi Fora",
+        "country": "Kenia",
+        "lat": 3.948,
+        "lng": 36.18,
+        "group": "Pleistoceno Inferior",
+        "periodo": "Plio-Pleistoceno (~1,9–1,5 Ma)",
+        "from": -1900000,
+        "to": -1500000,
+        "species": "Homo habilis/rudolfensis, Homo erectus/ergaster",
+        "culture": "Olduvayense y Achelense temprano",
+        "hallazgos": "KNM-ER 1470, KNM-ER 1813, KNM-ER 3733 y conjuntos líticos.",
+        "excavacion": "Campañas desde finales de los años 1960 y 1970.",
+        "investigadores": "Richard Leakey, Meave Leakey, Kamoya Kimeu y equipo.",
+        "datos": "Crucial para la diversidad de Homo temprano en Turkana.",
+        "source": "https://humanorigins.si.edu/evidence/human-fossils/fossils/knm-er-1813",
+        "img": "https://humanorigins.si.edu/sites/default/files/styles/full_width/public/habilis_KNMER1813_skull_CC_lt_3qtr_sq.jpg.webp?itok=KWacuIh5",
+        "imgCredit": "Chip Clark / Smithsonian Institution"
+    },
+    {
+        "name": "Nariokotome · West Turkana",
+        "country": "Kenia",
+        "lat": 4.11,
+        "lng": 35.85,
+        "group": "Pleistoceno Inferior",
+        "periodo": "Pleistoceno Inferior (~1,6 Ma)",
+        "from": -1600000,
+        "to": -1500000,
+        "species": "Homo ergaster / Homo erectus",
+        "culture": "Achelense temprano / Modo 2 regional",
+        "hallazgos": "Esqueleto KNM-WT 15000 “Turkana Boy”.",
+        "excavacion": "Descubrimiento en 1984.",
+        "investigadores": "Kamoya Kimeu, Richard Leakey y Alan Walker.",
+        "datos": "Uno de los esqueletos más completos de Homo erectus/ergaster.",
+        "source": "https://humanorigins.si.edu/evidence/human-fossils/species/homo-erectus",
+        "img": "https://commons.wikimedia.org/wiki/Special:FilePath/Ni%C3%B1o%20de%20Turkana%20-%20Museo%20Nacional%20de%20Nairobi.jpg?width=640",
+        "imgCredit": "Wikimedia Commons",
+        "imgSource": "https://commons.wikimedia.org/wiki/File:Ni%C3%B1o_de_Turkana_-_Museo_Nacional_de_Nairobi.jpg",
+        "externalPhotos": [
+            {
+                "label": "Fotos en Google Maps",
+                "url": "https://www.google.com/maps/search/?api=1&query=Nariokotome%20Turkana%20Boy%20West%20Turkana%20Kenya"
+            }
+        ]
+    },
+    {
+        "name": "Kanjera Sur",
+        "country": "Kenia",
+        "lat": -0.31,
+        "lng": 34.397,
+        "group": "Pleistoceno Inferior",
+        "periodo": "Pleistoceno temprano (~2,0 Ma)",
+        "from": -2050000,
+        "to": -1950000,
+        "species": "Homo temprano",
+        "culture": "Olduvayense",
+        "hallazgos": "Herramientas líticas y fauna con evidencias de acceso a carne.",
+        "excavacion": "Investigaciones publicadas en 2013; campañas anteriores y posteriores.",
+        "investigadores": "Thomas Plummer, Joseph Ferraro, Briana Pobiner y equipo.",
+        "datos": "Clave para el debate sobre consumo persistente de carne.",
+        "img": "https://mediasvc.eurekalert.org/Api/v1/Multimedia/c7730adc-df79-49af-b416-3e5bca84ca98/Rendition/low-res/Content/Public",
+        "imgCredit": "Thomas Plummer / EurekAlert! / Baylor University",
+        "imgSource": "https://www.eurekalert.org/multimedia/575474",
+        "source": "https://humanorigins.si.edu/research/east-african-research-projects/kanjera-kenya",
+        "externalPhotos": [
+            {
+                "label": "Ficha Smithsonian",
+                "url": "https://humanorigins.si.edu/research/east-african-research-projects/kanjera-kenya"
+            },
+            {
+                "label": "Fotos en Google Maps",
+                "url": "https://www.google.com/maps/search/?api=1&query=Kanjera%20South%20archaeological%20site%20Kenya"
+            }
+        ]
+    },
+    {
+        "name": "Olorgesailie",
+        "country": "Kenia",
+        "lat": -1.583,
+        "lng": 36.45,
+        "group": "Pleistoceno Medio",
+        "periodo": "Pleistoceno Medio (~1,2 Ma–300 ka)",
+        "from": -1200000,
+        "to": -300000,
+        "species": "Homo erectus/heidelbergensis sensu lato",
+        "culture": "Achelense; transición Middle Stone Age",
+        "hallazgos": "Grandes acumulaciones de bifaces y evidencias de innovación tecnológica posterior.",
+        "excavacion": "Trabajos desde los años 1940; Smithsonian desde los años 1980–2000.",
+        "investigadores": "Mary Leakey, Glynn Isaac, Rick Potts y equipo.",
+        "datos": "Sitio de referencia para cambios ambientales e innovación tecnológica en África oriental.",
+        "source": "https://humanorigins.si.edu/research/east-african-research-projects/olorgesailie-kenya",
+        "img": "https://commons.wikimedia.org/wiki/Special:FilePath/Olorgesailie%20Handaxes.jpg?width=640",
+        "imgCredit": "Jonathan Chen · Wikimedia Commons",
+        "imgSource": "https://commons.wikimedia.org/wiki/File:Olorgesailie_Handaxes.jpg",
+        "externalPhotos": [
+            {
+                "label": "Google Arts & Culture",
+                "url": "https://artsandculture.google.com/asset/olorgesailie-pre-historic-site/kQEnvITpsN-qPQ?hl=en"
+            },
+            {
+                "label": "Fotos en Google Maps",
+                "url": "https://www.google.com/maps/search/?api=1&query=Olorgesailie%20Prehistoric%20Site%20Kenya"
+            }
+        ]
+    },
+    {
+        "name": "Schöningen",
+        "country": "Alemania",
+        "lat": 52.142,
+        "lng": 10.972,
+        "group": "Pleistoceno Medio",
+        "periodo": "Pleistoceno Medio (~400 ka)",
+        "from": -400000,
+        "to": -300000,
+        "species": "Homo heidelbergensis / linaje neandertal",
+        "culture": "Achelense tardío / tecnología orgánica",
+        "hallazgos": "Lanzas de madera, herramientas y restos de caballos.",
+        "excavacion": "Descubrimientos principales en 1994–1998; primera lanza publicada como hallada en 1995.",
+        "investigadores": "Hartmut Thieme y equipos posteriores.",
+        "datos": "Evidencia temprana de caza planificada con armas de madera.",
+        "img": "https://humanorigins.si.edu/sites/default/files/styles/full_width/public/3.3.5-1_Spear_Schoningen_CC_p.jpg.webp?itok=dtAX5mP4",
+        "imgCredit": "Smithsonian Institution · Human Origins Program",
+        "source": "https://humanorigins.si.edu/evidence/behavior/getting-food/oldest-wooden-spear"
+    },
+    {
+        "name": "Mauer",
+        "country": "Alemania",
+        "lat": 49.34,
+        "lng": 8.801,
+        "group": "Pleistoceno Medio",
+        "periodo": "Pleistoceno Medio (~600 ka)",
+        "from": -620000,
+        "to": -550000,
+        "species": "Homo heidelbergensis",
+        "culture": "Paleolítico inferior europeo",
+        "hallazgos": "Mandíbula de Mauer, holotipo de Homo heidelbergensis.",
+        "excavacion": "Descubrimiento en 1907.",
+        "investigadores": "Daniel Hartmann; Otto Schoetensack describió el fósil.",
+        "datos": "Fósil epónimo para H. heidelbergensis.",
+        "img": "https://commons.wikimedia.org/wiki/Special:FilePath/Mandibel%20from%20Mauer.JPG?width=640",
+        "imgCredit": "Gerbil · Wikimedia Commons",
+        "imgSource": "https://commons.wikimedia.org/wiki/File:Mandibel_from_Mauer.JPG",
+        "source": "https://humanorigins.si.edu/evidence/human-fossils/species/homo-heidelbergensis",
+        "externalPhotos": [
+            {
+                "label": "Fotos en Google Maps",
+                "url": "https://www.google.com/maps/search/?api=1&query=Mauer%20Homo%20heidelbergensis%20mandible%20site%20Germany"
+            }
+        ]
+    },
+    {
+        "name": "Boxgrove",
+        "country": "Reino Unido",
+        "lat": 50.867,
+        "lng": -0.713,
+        "group": "Pleistoceno Medio",
+        "periodo": "Pleistoceno Medio (~500 ka)",
+        "from": -550000,
+        "to": -450000,
+        "species": "Homo heidelbergensis / linaje europeo arcaico",
+        "culture": "Achelense",
+        "hallazgos": "Tibia humana, dientes, bifaces y fauna procesada.",
+        "excavacion": "Excavaciones principales en los años 1980–1990.",
+        "investigadores": "Mark Roberts y equipo.",
+        "datos": "Uno de los mejores conjuntos achelenses de Europa noroccidental.",
+        "img": "https://commons.wikimedia.org/wiki/Special:FilePath/Boxgrove%20handaxe.jpg?width=640",
+        "imgCredit": "Midnightblueowl · Wikimedia Commons",
+        "imgSource": "https://commons.wikimedia.org/wiki/File:Boxgrove_handaxe.jpg",
+        "source": "https://www.nhm.ac.uk/discover/news/2022/november/earliest-human-fossils-in-the-uk-reveal-how-europeans-connected.html",
+        "externalPhotos": [
+            {
+                "label": "Fotos en Google Maps",
+                "url": "https://www.google.com/maps/search/?api=1&query=Boxgrove%20archaeological%20site%20West%20Sussex"
+            }
+        ]
+    },
+    {
+        "name": "Majuangou · Cuenca de Nihewan",
+        "country": "China",
+        "lat": 40.1,
+        "lng": 114.65,
+        "group": "Pleistoceno Inferior",
+        "periodo": "Pleistoceno Inferior (~1,66 Ma)",
+        "from": -1700000,
+        "to": -1600000,
+        "species": "Homo erectus temprano / Homo sp.",
+        "culture": "Modo 1 asiático",
+        "hallazgos": "Núcleos y lascas asociadas a fauna y evidencias de carnicería.",
+        "excavacion": "Investigaciones sino-estadounidenses publicadas desde los años 2000.",
+        "investigadores": "Zhu Rixiang, Rick Potts y equipo.",
+        "datos": "Evidencia importante para la expansión temprana hacia Asia oriental.",
+        "img": "https://humanorigins.si.edu/sites/default/files/styles/full_width/public/images/landscape/4.2.1-1_IVPP_P5470_stone_core_majuangou_xiaochangliang_jddh_l.jpg.webp?itok=3gVRdb7T",
+        "imgCredit": "Smithsonian Institution · Human Origins Program",
+        "source": "https://humanorigins.si.edu/evidence/behavior/stone-tools/early-stone-age-tools/stone-tools-majuangou-china"
+    },
+    {
+        "name": "Zhoukoudian",
+        "country": "China",
+        "lat": 39.689,
+        "lng": 115.93,
+        "group": "Pleistoceno Medio",
+        "periodo": "Pleistoceno Medio (~770–400 ka)",
+        "from": -770000,
+        "to": -400000,
+        "species": "Homo erectus pekinensis",
+        "culture": "Modo 1/tecnología regional; uso del fuego debatido",
+        "hallazgos": "Restos del “Hombre de Pekín”, fauna, herramientas y evidencias de ocupación.",
+        "excavacion": "Excavaciones principales desde 1921–1937; trabajos posteriores.",
+        "investigadores": "Johan Gunnar Andersson, Davidson Black, Pei Wenzhong y equipo.",
+        "datos": "Sitio clásico para Homo erectus en Asia oriental.",
+        "source": "https://whc.unesco.org/en/list/449/",
+        "img": "https://commons.wikimedia.org/wiki/Special:FilePath/Zhoukoudian-5.jpg?width=640",
+        "imgCredit": "Finblanco · Wikimedia Commons",
+        "imgSource": "https://commons.wikimedia.org/wiki/File:Zhoukoudian-5.jpg",
+        "externalPhotos": [
+            {
+                "label": "Fotos en Google Maps",
+                "url": "https://www.google.com/maps/search/?api=1&query=Zhoukoudian%20Peking%20Man%20Site%20China"
+            }
+        ]
+    },
+    {
+        "name": "Sangiran",
+        "country": "Indonesia",
+        "lat": -7.457,
+        "lng": 110.836,
+        "group": "Pleistoceno Inferior",
+        "periodo": "Pleistoceno Inferior–Medio (~1,5–0,4 Ma)",
+        "from": -1500000,
+        "to": -400000,
+        "species": "Homo erectus",
+        "culture": "Paleolítico inferior de Java",
+        "hallazgos": "Numerosos restos de Homo erectus y fauna pleistocena.",
+        "excavacion": "Excavaciones de von Koenigswald en 1936–1941; investigaciones posteriores.",
+        "investigadores": "G. H. R. von Koenigswald y equipos indonesios.",
+        "datos": "Uno de los principales sitios de Homo erectus en Asia.",
+        "source": "https://whc.unesco.org/en/list/593/",
+        "img": "https://commons.wikimedia.org/wiki/Special:FilePath/Homo%20erectus%20Sangiran%2017%20IMG%205644%20BMNH.jpg?width=640",
+        "imgCredit": "Gerbil · Wikimedia Commons",
+        "imgSource": "https://commons.wikimedia.org/wiki/File:Homo_erectus_Sangiran_17_IMG_5644_BMNH.jpg",
+        "externalPhotos": [
+            {
+                "label": "Fotos en Google Maps",
+                "url": "https://www.google.com/maps/search/?api=1&query=Sangiran%20Early%20Man%20Site%20Indonesia"
+            }
+        ]
+    },
+    {
+        "name": "Trinil",
+        "country": "Indonesia",
+        "lat": -7.388,
+        "lng": 111.321,
+        "group": "Pleistoceno Inferior",
+        "periodo": "Pleistoceno Inferior–Medio (~1,0–0,7 Ma)",
+        "from": -1000000,
+        "to": -700000,
+        "species": "Homo erectus",
+        "culture": "Paleolítico inferior de Java",
+        "hallazgos": "Calota, fémur y diente del “Hombre de Java”.",
+        "excavacion": "1891–1892.",
+        "investigadores": "Eugène Dubois.",
+        "datos": "Uno de los primeros fósiles que consolidaron una visión evolutiva del origen humano.",
+        "img": "https://commons.wikimedia.org/wiki/Special:FilePath/Pithecanthropus%20erectus-PeterMaas%20Naturalis.jpg?width=640",
+        "imgCredit": "Peter Maas / Naturalis · Wikimedia Commons",
+        "imgSource": "https://commons.wikimedia.org/wiki/File:Pithecanthropus_erectus-PeterMaas_Naturalis.jpg",
+        "source": "https://humanorigins.si.edu/evidence/human-fossils/fossils/trinil-2",
+        "externalPhotos": [
+            {
+                "label": "Fotos en Google Maps",
+                "url": "https://www.google.com/maps/search/?api=1&query=Trinil%20Java%20Man%20site%20Indonesia"
+            }
+        ]
+    },
+    {
+        "name": "Gesher Benot Ya’aqov",
+        "country": "Israel",
+        "lat": 33.001,
+        "lng": 35.626,
+        "group": "Pleistoceno Medio",
+        "periodo": "Pleistoceno Medio (~790–780 ka)",
+        "from": -800000,
+        "to": -780000,
+        "species": "Homo erectus/heidelbergensis sensu lato",
+        "culture": "Achelense",
+        "hallazgos": "Semillas, madera, pedernal quemado y organización espacial de hogares.",
+        "excavacion": "Excavaciones modernas desde finales de los años 1980–1990.",
+        "investigadores": "Naama Goren-Inbar y equipo.",
+        "datos": "Evidencia temprana relevante para el control del fuego y la conducta espacial.",
+        "img": "https://commons.wikimedia.org/wiki/Special:FilePath/Naama%20Goren-Inbar%20collecting%20samples%20at%20Gesher%20Benot%20Ya%27aqov.jpg?width=640",
+        "imgCredit": "Wikimedia Commons",
+        "imgSource": "https://commons.wikimedia.org/wiki/File:Naama_Goren-Inbar_collecting_samples_at_Gesher_Benot_Ya'aqov.jpg",
+        "externalPhotos": [
+            {
+                "label": "Fotos en Google Maps",
+                "url": "https://www.google.com/maps/search/?api=1&query=Gesher%20Benot%20Yaakov%20archaeological%20site%20Israel"
+            }
+        ]
+    },
+    {
+        "name": "Qesem Cave",
+        "country": "Israel",
+        "lat": 32.101,
+        "lng": 34.967,
+        "group": "Pleistoceno Medio",
+        "periodo": "Pleistoceno Medio tardío (~420–200 ka)",
+        "from": -420000,
+        "to": -200000,
+        "species": "Homo sp. del Levante",
+        "culture": "Acheulo-Yabrudiense",
+        "hallazgos": "Dientes humanos, herramientas, hogares y restos de fauna procesada.",
+        "excavacion": "Descubierta en 2000; excavaciones desde 2001.",
+        "investigadores": "Avi Gopher, Ran Barkai y equipo.",
+        "datos": "Sitio clave para cambios tecnológicos y subsistencia en el Levante.",
+        "img": "https://commons.wikimedia.org/wiki/Special:FilePath/Shaped%20stone%20balls%20from%20Qesem%20Cave.png?width=640",
+        "imgCredit": "Wikimedia Commons",
+        "imgSource": "https://commons.wikimedia.org/wiki/File:Shaped_stone_balls_from_Qesem_Cave.png",
+        "externalPhotos": [
+            {
+                "label": "Fotos en Google Maps",
+                "url": "https://www.google.com/maps/search/?api=1&query=Qesem%20Cave%20Israel%20archaeological%20site"
+            }
+        ]
+    },
+    {
+        "name": "Denisova Cave",
+        "country": "Rusia · Altái",
+        "lat": 51.397,
+        "lng": 84.676,
+        "group": "Pleistoceno Superior",
+        "periodo": "Pleistoceno Medio–Superior (~200–30 ka)",
+        "from": -200000,
+        "to": -30000,
+        "species": "Denisovanos; neandertales; Homo sapiens tardío",
+        "culture": "Musteriense/Altái paleolítico",
+        "hallazgos": "Falange, dientes, ADN antiguo y restos fragmentarios identificados por ZooMS.",
+        "excavacion": "Excavaciones desde los años 1970; ADN denisovano identificado en 2010.",
+        "investigadores": "Anatoly Derevianko, Svante Pääbo, Max Planck Institute y equipos rusos.",
+        "datos": "Sitio que definió genéticamente a los denisovanos.",
+        "source": "https://www.mpg.de/5688910/denisova",
+        "img": "https://commons.wikimedia.org/wiki/Special:FilePath/Denisova%20Phalanx%20distalis.jpg?width=640",
+        "imgCredit": "Wikimedia Commons",
+        "imgSource": "https://commons.wikimedia.org/wiki/File:Denisova_Phalanx_distalis.jpg",
+        "externalPhotos": [
+            {
+                "label": "Fotos en Google Maps",
+                "url": "https://www.google.com/maps/search/?api=1&query=Denisova%20Cave%20Altai%20Russia"
+            }
+        ]
+    },
+    {
+        "name": "Shanidar",
+        "country": "Irak",
+        "lat": 36.833,
+        "lng": 44.222,
+        "group": "Pleistoceno Superior",
+        "periodo": "Pleistoceno Superior (~75–45 ka)",
+        "from": -75000,
+        "to": -45000,
+        "species": "Homo neanderthalensis",
+        "culture": "Musteriense",
+        "hallazgos": "Esqueletos neandertales, evidencias de cuidado social y debates sobre enterramientos.",
+        "excavacion": "1951–1960; nuevas excavaciones desde 2014.",
+        "investigadores": "Ralph Solecki; Graeme Barker y equipo reciente.",
+        "datos": "Sitio clave para comportamiento social neandertal.",
+        "source": "https://humanorigins.si.edu/evidence/human-fossils/fossils/shanidar-1",
+        "img": "https://humanorigins.si.edu/sites/default/files/styles/full_width/public/images/landscape/neanderthalensis_Shanidar1_CC_f_l.jpg.webp?itok=Rq_-DfWY",
+        "imgCredit": "Chip Clark / Smithsonian Institution"
+    },
+    {
+        "name": "Krapina",
+        "country": "Croacia",
+        "lat": 46.161,
+        "lng": 15.88,
+        "group": "Pleistoceno Superior",
+        "periodo": "Pleistoceno Superior temprano (~130 ka)",
+        "from": -135000,
+        "to": -125000,
+        "species": "Homo neanderthalensis",
+        "culture": "Musteriense",
+        "hallazgos": "Cientos de restos neandertales y garras de águila modificadas.",
+        "excavacion": "1899–1905.",
+        "investigadores": "Dragutin Gorjanović-Kramberger.",
+        "datos": "Importante para anatomía, conducta simbólica debatida y tafonomía neandertal.",
+        "img": "https://humanorigins.si.edu/sites/default/files/styles/full_width/public/neanderthalensis_skeleton_CC_f_p.jpg.webp?itok=RIIL2xia",
+        "imgCredit": "Chip Clark / Smithsonian Institution",
+        "source": "https://humanorigins.si.edu/evidence/human-fossils/fossils/neanderthal-composite-skeleton"
+    },
+    {
+        "name": "El Sidrón · Asturias",
+        "country": "España",
+        "lat": 43.388,
+        "lng": -5.327,
+        "group": "Pleistoceno Superior",
+        "periodo": "Pleistoceno Superior (~49–43 ka)",
+        "from": -49000,
+        "to": -43000,
+        "species": "Homo neanderthalensis",
+        "culture": "Musteriense",
+        "hallazgos": "Restos de un grupo neandertal con ADN antiguo conservado.",
+        "excavacion": "Descubrimiento accidental en 1994; excavación sistemática 2000–2013.",
+        "investigadores": "Antonio Rosas, Carles Lalueza-Fox y equipo.",
+        "datos": "Clave para genética, parentesco y dieta neandertal en Iberia.",
+        "img": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/ca/Mand%C3%ADbula_El_Sidr%C3%B3n.jpg/640px-Mand%C3%ADbula_El_Sidr%C3%B3n.jpg",
+        "imgCredit": "Imagen de referencia / Wikimedia Commons"
+    },
+    {
+        "name": "Gorham y Vanguard Caves · Gibraltar",
+        "country": "Gibraltar",
+        "lat": 36.121,
+        "lng": -5.343,
+        "group": "Pleistoceno Superior",
+        "periodo": "Pleistoceno Superior (~60–32 ka; últimos neandertales debatidos)",
+        "from": -60000,
+        "to": -32000,
+        "species": "Homo neanderthalensis",
+        "culture": "Musteriense",
+        "hallazgos": "Hogares, industria lítica, fauna marina/terrestre, grabados y ocupaciones neandertales.",
+        "excavacion": "Excavaciones modernas desde finales del siglo XX; campañas de 1989–actualidad.",
+        "investigadores": "Clive Finlayson, Geraldine Finlayson y equipo.",
+        "datos": "Uno de los complejos clave para la persistencia y ecología neandertal.",
+        "img": "https://whc.unesco.org/document/141140",
+        "imgCredit": "Clive Finlayson / Gibraltar Museum / UNESCO",
+        "source": "https://whc.unesco.org/en/list/1500/"
+    },
+    {
+        "name": "La Ferrassie",
+        "country": "Francia",
+        "lat": 44.952,
+        "lng": 1.013,
+        "group": "Pleistoceno Superior",
+        "periodo": "Pleistoceno Superior (~70–40 ka)",
+        "from": -70000,
+        "to": -40000,
+        "species": "Homo neanderthalensis",
+        "culture": "Musteriense",
+        "hallazgos": "Esqueletos neandertales adultos e infantiles, sepulturas debatidas.",
+        "excavacion": "1909–1921; revisiones posteriores.",
+        "investigadores": "Denis Peyrony y Louis Capitan.",
+        "datos": "Yacimiento central para anatomía neandertal y prácticas mortuorias.",
+        "img": "https://humanorigins.si.edu/sites/default/files/styles/full_width/public/neanderthalensis_skeleton_CC_f_p.jpg.webp?itok=RIIL2xia",
+        "imgCredit": "Chip Clark / Smithsonian Institution",
+        "source": "https://humanorigins.si.edu/evidence/human-fossils/fossils/neanderthal-composite-skeleton"
+    },
+    {
+        "name": "Le Moustier",
+        "country": "Francia",
+        "lat": 44.999,
+        "lng": 1.063,
+        "group": "Pleistoceno Superior",
+        "periodo": "Pleistoceno Superior (~45 ka)",
+        "from": -50000,
+        "to": -40000,
+        "species": "Homo neanderthalensis",
+        "culture": "Musteriense",
+        "hallazgos": "Restos neandertales y tecnología lítica que dio nombre al Musteriense.",
+        "excavacion": "Descubrimientos desde 1908.",
+        "investigadores": "Otto Hauser, Denis Peyrony y otros.",
+        "datos": "Sitio epónimo del Musteriense.",
+        "img": "https://humanorigins.si.edu/sites/default/files/styles/full_width/public/neanderthalensis_skeleton_CC_f_p.jpg.webp?itok=RIIL2xia",
+        "imgCredit": "Chip Clark / Smithsonian Institution",
+        "source": "https://humanorigins.si.edu/evidence/human-fossils/fossils/neanderthal-composite-skeleton"
+    },
+    {
+        "name": "Kebara Cave",
+        "country": "Israel",
+        "lat": 32.671,
+        "lng": 34.966,
+        "group": "Pleistoceno Superior",
+        "periodo": "Pleistoceno Superior (~60 ka)",
+        "from": -65000,
+        "to": -50000,
+        "species": "Homo neanderthalensis",
+        "culture": "Musteriense levantino",
+        "hallazgos": "Esqueleto Kebara 2, hioides y evidencias de enterramiento.",
+        "excavacion": "Década de 1980.",
+        "investigadores": "Ofer Bar-Yosef, Bernard Vandermeersch y equipo.",
+        "datos": "Importante para anatomía torácica, hioides y comportamiento mortuorio neandertal.",
+        "img": "https://humanorigins.si.edu/sites/default/files/styles/full_width/public/neanderthalensis_skeleton_CC_f_p.jpg.webp?itok=RIIL2xia",
+        "imgCredit": "Chip Clark / Smithsonian Institution",
+        "source": "https://humanorigins.si.edu/evidence/human-fossils/fossils/neanderthal-composite-skeleton"
+    },
+    {
+        "name": "Liang Bua",
+        "country": "Indonesia · Flores",
+        "lat": -8.533,
+        "lng": 120.45,
+        "group": "Pleistoceno Superior",
+        "periodo": "Pleistoceno Superior (~100–50 ka)",
+        "from": -100000,
+        "to": -50000,
+        "species": "Homo floresiensis",
+        "culture": "Herramientas de piedra insulares",
+        "hallazgos": "Esqueleto LB-1 “Hobbit” y otros restos de H. floresiensis.",
+        "excavacion": "Descubrimiento de LB-1 en 2003; campañas posteriores.",
+        "investigadores": "Michael Morwood, Raden Soejono, Thomas Sutikna y equipo.",
+        "datos": "Evidencia de una especie humana insular de pequeño tamaño contemporánea de humanos modernos tempranos regionales.",
+        "img": "https://humanorigins.si.edu/sites/default/files/styles/full_width/public/images/landscape/floresiensis_skull_JC_3qtr_lt_l.jpg.webp?itok=T4bVwCmw",
+        "imgCredit": "Smithsonian Institution · Human Origins Program",
+        "source": "https://humanorigins.si.edu/evidence/human-fossils/fossils/lb-1"
+    },
+    {
+        "name": "Callao Cave",
+        "country": "Filipinas · Luzón",
+        "lat": 18,
+        "lng": 121.8,
+        "group": "Pleistoceno Superior",
+        "periodo": "Pleistoceno Superior (~67–50 ka)",
+        "from": -67000,
+        "to": -50000,
+        "species": "Homo luzonensis",
+        "culture": "Sin cultura material segura asociada",
+        "hallazgos": "Dientes, falanges y restos fragmentarios de Homo luzonensis.",
+        "excavacion": "Restos principales desde 2007; especie publicada en 2019.",
+        "investigadores": "Armand Mijares, Florent Détroit y equipo.",
+        "datos": "Amplía la diversidad humana insular en el Sudeste Asiático.",
+        "img": "https://commons.wikimedia.org/wiki/Special:FilePath/Homo%20luzonensis%20metatarsal%20%28cropped%29.jpg?width=640",
+        "imgCredit": "Luzonensis · Wikimedia Commons",
+        "imgSource": "https://commons.wikimedia.org/wiki/File:Homo_luzonensis_metatarsal_(cropped).jpg",
+        "externalPhotos": [
+            {
+                "label": "Fotos en Google Maps",
+                "url": "https://www.google.com/maps/search/?api=1&query=Callao%20Cave%20Cagayan%20Philippines%20Homo%20luzonensis"
+            }
+        ]
+    },
+    {
+        "name": "Blombos Cave",
+        "country": "Sudáfrica",
+        "lat": -34.418,
+        "lng": 21.221,
+        "group": "Pleistoceno Superior",
+        "periodo": "Middle Stone Age (~100–70 ka)",
+        "from": -100000,
+        "to": -70000,
+        "species": "Homo sapiens",
+        "culture": "Middle Stone Age",
+        "hallazgos": "Ocre grabado, cuentas de concha, puntas bifaciales y taller de pigmentos.",
+        "excavacion": "Desde 1991.",
+        "investigadores": "Christopher Henshilwood y equipo.",
+        "datos": "Clave para comportamiento simbólico temprano de H. sapiens.",
+        "img": "https://humanorigins.si.edu/sites/default/files/styles/full_width/public/climate_effects_image_15.jpg.webp?itok=2IwNjHT2",
+        "imgCredit": "Smithsonian Institution · Human Origins Program",
+        "source": "https://humanorigins.si.edu/evidence/behavior/recording-information/blombos-ocher-plaque"
+    },
+    {
+        "name": "Hohle Fels",
+        "country": "Alemania",
+        "lat": 48.382,
+        "lng": 9.765,
+        "group": "Pleistoceno Superior",
+        "periodo": "Paleolítico Superior (~40–35 ka)",
+        "from": -40000,
+        "to": -35000,
+        "species": "Homo sapiens",
+        "culture": "Auriñaciense",
+        "hallazgos": "Venus de Hohle Fels, flautas de hueso/marfil y arte mueble.",
+        "excavacion": "Desde el siglo XIX; campañas modernas de Nicholas Conard desde los años 1990.",
+        "investigadores": "Nicholas J. Conard y equipo.",
+        "datos": "Entre las primeras evidencias de arte figurativo y música.",
+        "img": "https://humanorigins.si.edu/sites/default/files/styles/full_width/public/images/landscape/3.8.1-3_Mammoth_Ivory_Flute__Germany_CC_l.jpg.webp?itok=mf0BPIIU",
+        "imgCredit": "Smithsonian Institution · Human Origins Program",
+        "source": "https://humanorigins.si.edu/evidence/behavior/art-music/musical-instruments/ancient-flute"
+    },
+    {
+        "name": "Geissenklösterle",
+        "country": "Alemania",
+        "lat": 48.398,
+        "lng": 9.78,
+        "group": "Pleistoceno Superior",
+        "periodo": "Paleolítico Superior (~42–35 ka)",
+        "from": -42000,
+        "to": -35000,
+        "species": "Homo sapiens",
+        "culture": "Auriñaciense",
+        "hallazgos": "Flautas de marfil y hueso, arte mueble.",
+        "excavacion": "Excavaciones modernas en las décadas de 1970–2000.",
+        "investigadores": "Joachim Hahn, Nicholas Conard y equipo.",
+        "datos": "Importante para música y arte temprano en el Jura suabo.",
+        "img": "https://humanorigins.si.edu/sites/default/files/styles/full_width/public/images/landscape/3.8.1-3_Mammoth_Ivory_Flute__Germany_CC_l.jpg.webp?itok=mf0BPIIU",
+        "imgCredit": "Smithsonian Institution · Human Origins Program",
+        "source": "https://humanorigins.si.edu/evidence/behavior/art-music/musical-instruments/ancient-flute"
+    },
+    {
+        "name": "Cueva de Chauvet",
+        "country": "Francia",
+        "lat": 44.388,
+        "lng": 4.414,
+        "group": "Pleistoceno Superior",
+        "periodo": "Paleolítico Superior (~36–30 ka)",
+        "from": -36000,
+        "to": -30000,
+        "species": "Homo sapiens",
+        "culture": "Auriñaciense/Gravetiense debatido",
+        "hallazgos": "Arte rupestre con rinocerontes, leones, caballos y osos.",
+        "excavacion": "Descubierta en 1994; estudios científicos desde 1996.",
+        "investigadores": "Jean-Marie Chauvet, Éliette Brunel, Christian Hillaire; Jean Clottes y equipo.",
+        "datos": "Uno de los conjuntos de arte parietal más antiguos y complejos.",
+        "img": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/65/Chauvet_Cave.jpg/640px-Chauvet_Cave.jpg",
+        "imgCredit": "Imagen de referencia / Wikimedia Commons"
+    },
+    {
+        "name": "Dolní Věstonice",
+        "country": "República Checa",
+        "lat": 48.89,
+        "lng": 16.646,
+        "group": "Pleistoceno Superior",
+        "periodo": "Paleolítico Superior (~30–25 ka)",
+        "from": -30000,
+        "to": -25000,
+        "species": "Homo sapiens",
+        "culture": "Gravetiense / Pavloviense",
+        "hallazgos": "Figurillas cerámicas, entierros, estructuras y restos de mamut.",
+        "excavacion": "Desde 1924; excavaciones de Karel Absolon en los años 1920–1930.",
+        "investigadores": "Karel Absolon y equipos checos posteriores.",
+        "datos": "Clave para arte mueble, tecnología cerámica temprana y vida gravetiense.",
+        "img": "https://commons.wikimedia.org/wiki/Special:FilePath/Ceramic%20Venus%20of%20Dolni%20Vestonice.png?width=640",
+        "imgCredit": "Wikimedia Commons",
+        "imgSource": "https://commons.wikimedia.org/wiki/File:Ceramic_Venus_of_Dolni_Vestonice.png",
+        "externalPhotos": [
+            {
+                "label": "Fotos en Google Maps",
+                "url": "https://www.google.com/maps/search/?api=1&query=Dolni%20Vestonice%20archaeological%20site%20Czech%20Republic"
+            }
+        ]
+    },
+    {
+        "name": "Jebel Irhoud",
+        "country": "Marruecos",
+        "lat": 31.85,
+        "lng": -8.87,
+        "group": "Pleistoceno Medio",
+        "periodo": "Pleistoceno Medio tardío (~315 ka)",
+        "from": -315000,
+        "to": -280000,
+        "species": "Homo sapiens temprano",
+        "culture": "Middle Stone Age africano",
+        "hallazgos": "Restos humanos, herramientas Levallois y fauna quemada.",
+        "excavacion": "Descubierto en 1961; nuevas excavaciones desde 2004.",
+        "investigadores": "Jean-Jacques Hublin, Abdelouahed Ben-Ncer y equipo.",
+        "datos": "Entre las evidencias más antiguas de Homo sapiens anatómicamente temprano.",
+        "source": "https://www.mpg.de/11349284/jebel-irhoud-homo-sapiens",
+        "img": "https://commons.wikimedia.org/wiki/Special:FilePath/Jebel%20Irhoud%201.%20Homo%20Sapiens.jpg?width=640",
+        "imgCredit": "Ryan Somma · Wikimedia Commons",
+        "imgSource": "https://commons.wikimedia.org/wiki/File:Jebel_Irhoud_1._Homo_Sapiens.jpg",
+        "externalPhotos": [
+            {
+                "label": "Max Planck",
+                "url": "https://www.mpg.de/11349284/jebel-irhoud-homo-sapiens"
+            },
+            {
+                "label": "Fotos en Google Maps",
+                "url": "https://www.google.com/maps/search/?api=1&query=Jebel%20Irhoud%20Morocco%20archaeological%20site"
+            }
+        ]
+    },
+    {
+        "name": "Omo Kibish",
+        "country": "Etiopía",
+        "lat": 5.4,
+        "lng": 36,
+        "group": "Pleistoceno Superior",
+        "periodo": "Pleistoceno Superior temprano (>200 ka)",
+        "from": -235000,
+        "to": -190000,
+        "species": "Homo sapiens",
+        "culture": "Middle Stone Age",
+        "hallazgos": "Omo I y Omo II.",
+        "excavacion": "1967; reevaluaciones y dataciones posteriores.",
+        "investigadores": "Richard Leakey, Fleagle, McDougall y equipos posteriores.",
+        "datos": "Referencia central para los orígenes africanos de Homo sapiens.",
+        "source": "https://humanorigins.si.edu/evidence/human-fossils/species/homo-sapiens",
+        "img": "https://commons.wikimedia.org/wiki/Special:FilePath/Omo%20II%2001.jpg?width=640",
+        "imgCredit": "Alessandrosmerilli · Wikimedia Commons",
+        "imgSource": "https://commons.wikimedia.org/wiki/File:Omo_II_01.jpg",
+        "externalPhotos": [
+            {
+                "label": "Fotos en Google Maps",
+                "url": "https://www.google.com/maps/search/?api=1&query=Omo%20Kibish%20Ethiopia%20archaeological%20site"
+            }
+        ]
+    }
+];
+
+window.ARCH_DATA.SITES.push({
+  name: "West Turkana · Black Skull",
+  country: "Kenia",
+  lat: 3.93,
+  lng: 35.86,
+  group: "Plioceno",
+  periodo: "Plio-Pleistoceno (~2,5 Ma)",
+  from: -2600000,
+  to: -2300000,
+  species: "Paranthropus aethiopicus",
+  culture: "Sin industria lítica segura asociada",
+  hallazgos: "Cráneo KNM-WT 17000, conocido como Black Skull.",
+  excavacion: "Descubierto en 1985 en West Turkana.",
+  investigadores: "Alan Walker y equipo de West Turkana.",
+  datos: "Sitio clave para representar a Paranthropus aethiopicus y la diversidad robusta temprana en África oriental.",
+  source: "https://humanorigins.si.edu/evidence/human-fossils/species/paranthropus-aethiopicus",
+  img: "",
+  imgCredit: "",
+  taxonomicNote: "La posición filogenética de los parántropos robustos y su relación con Homo temprano sigue siendo discutida."
+});
+
+
+(function enrichSites() {
+  const periodByGroup = {
+    "Plioceno": ["plioceno"],
+    "Pleistoceno Inferior": ["pleistoceno-inferior"],
+    "Pleistoceno Medio": ["pleistoceno-medio"],
+    "Pleistoceno Superior": ["pleistoceno-superior"]
+  };
+  const manual = {
+    "Dmanisi": { speciesTags:["homo-erectus","homo-georgicus"], cultureTags:["olduvayense","modo-1"], routeTags:["route-erectus"] },
+    "Orozmani": { speciesTags:["homo-erectus"], cultureTags:["modo-1"], routeTags:["route-erectus"] },
+    "Sierra de Atapuerca · Gran Dolina": { speciesTags:["homo-antecessor"], cultureTags:["modo-1"], routeTags:["route-heidelbergensis"] },
+    "Sierra de Atapuerca · Sima de los Huesos": { speciesTags:["homo-heidelbergensis","neandertales"], cultureTags:["achelense"], routeTags:["route-heidelbergensis","route-neanderthals"] },
+    "Barranco León y Fuentenueva 3 · Orce": { speciesTags:["homo-sp"], cultureTags:["modo-1"] },
+    "Sterkfontein": { speciesTags:["australopithecus-africanus","australopithecus"] },
+    "Swartkrans": { speciesTags:["paranthropus-robustus","paranthropus","homo-ergaster","homo-erectus"], cultureTags:["olduvayense"], routeTags:["route-erectus"] },
+    "Rising Star · Dinaledi Chamber": { speciesTags:["homo-naledi"] },
+    "Malapa": { speciesTags:["australopithecus-sediba","australopithecus"] },
+    "Taung": { speciesTags:["australopithecus-africanus","australopithecus"] },
+    "Lomekwi · Lago Turkana": { speciesTags:["kenyanthropus-platyops"], cultureTags:["lomekwiense"] },
+    "Kanapoi y Allia Bay": { speciesTags:["australopithecus-anamensis","australopithecus"] },
+    "Hadar": { speciesTags:["australopithecus-afarensis","australopithecus"] },
+    "Laetoli": { speciesTags:["australopithecus-afarensis","australopithecus"] },
+    "Dikika": { speciesTags:["australopithecus-afarensis","australopithecus"] },
+    "Aramis · Middle Awash": { speciesTags:["ardipithecus-ramidus"] },
+    "Bouri": { speciesTags:["australopithecus-garhi","australopithecus"] },
+    "Gona": { speciesTags:["homo-temprano"], cultureTags:["olduvayense","modo-1"] },
+    "Koro Toro": { speciesTags:["australopithecus-bahrelghazali","australopithecus"] },
+    "Olduvai / Oldupai Gorge": { speciesTags:["homo-habilis","homo-erectus","homo-ergaster","paranthropus-boisei","paranthropus"], cultureTags:["olduvayense","achelense","modo-1","modo-2"], routeTags:["route-erectus"] },
+    "Koobi Fora": { speciesTags:["homo-habilis","homo-rudolfensis","homo-erectus","homo-ergaster"], cultureTags:["olduvayense","achelense"], routeTags:["route-erectus"] },
+    "Nariokotome · West Turkana": { speciesTags:["homo-ergaster","homo-erectus"], cultureTags:["achelense","modo-2"], routeTags:["route-erectus"] },
+    "Kanjera Sur": { speciesTags:["homo-temprano"], cultureTags:["olduvayense"] },
+    "Olorgesailie": { speciesTags:["homo-erectus","homo-heidelbergensis"], cultureTags:["achelense","middle-stone-age"], routeTags:["route-erectus","route-heidelbergensis"] },
+    "Schöningen": { speciesTags:["homo-heidelbergensis","neandertales"], cultureTags:["achelense"], routeTags:["route-heidelbergensis"] },
+    "Mauer": { speciesTags:["homo-heidelbergensis"], routeTags:["route-heidelbergensis"] },
+    "Boxgrove": { speciesTags:["homo-heidelbergensis"], cultureTags:["achelense"], routeTags:["route-heidelbergensis"] },
+    "Majuangou · Cuenca de Nihewan": { speciesTags:["homo-erectus","homo-sp"], cultureTags:["modo-1"], routeTags:["route-erectus"] },
+    "Zhoukoudian": { speciesTags:["homo-erectus"], cultureTags:["modo-1"], routeTags:["route-erectus"] },
+    "Sangiran": { speciesTags:["homo-erectus"], routeTags:["route-erectus"] },
+    "Trinil": { speciesTags:["homo-erectus"], routeTags:["route-erectus"] },
+    "Gesher Benot Ya’aqov": { speciesTags:["homo-erectus","homo-heidelbergensis"], cultureTags:["achelense"], routeTags:["route-erectus","route-heidelbergensis"] },
+    "Qesem Cave": { speciesTags:["homo-sp"], cultureTags:["acheulo-yabrudiense"] },
+    "Denisova Cave": { speciesTags:["denisovanos","hombre-de-denisova","neandertales","homo-sapiens"], cultureTags:["musteriense"], routeTags:["route-denisovans","route-neanderthals"] },
+    "Shanidar": { speciesTags:["homo-neanderthalensis","neandertales"], cultureTags:["musteriense"], routeTags:["route-neanderthals"] },
+    "Krapina": { speciesTags:["homo-neanderthalensis","neandertales"], cultureTags:["musteriense"], routeTags:["route-neanderthals"] },
+    "El Sidrón · Asturias": { speciesTags:["homo-neanderthalensis","neandertales"], cultureTags:["musteriense"], routeTags:["route-neanderthals"] },
+    "Gorham y Vanguard Caves · Gibraltar": { speciesTags:["homo-neanderthalensis","neandertales"], cultureTags:["musteriense"], routeTags:["route-neanderthals"] },
+    "La Ferrassie": { speciesTags:["homo-neanderthalensis","neandertales"], cultureTags:["musteriense"], routeTags:["route-neanderthals"] },
+    "Le Moustier": { speciesTags:["homo-neanderthalensis","neandertales"], cultureTags:["musteriense"], routeTags:["route-neanderthals"] },
+    "Kebara Cave": { speciesTags:["homo-neanderthalensis","neandertales"], cultureTags:["musteriense"], routeTags:["route-neanderthals"] },
+    "Liang Bua": { speciesTags:["homo-floresiensis"], routeTags:["route-island-hominins"] },
+    "Callao Cave": { speciesTags:["homo-luzonensis"], routeTags:["route-island-hominins"] },
+    "Blombos Cave": { speciesTags:["homo-sapiens"], cultureTags:["middle-stone-age"], focus:"sapiens-early" },
+    "Hohle Fels": { speciesTags:["homo-sapiens"], cultureTags:["aurinaciense","paleolitico-superior"], focus:"upper-paleolithic" },
+    "Geissenklösterle": { speciesTags:["homo-sapiens"], cultureTags:["aurinaciense","paleolitico-superior"], focus:"upper-paleolithic" },
+    "Cueva de Chauvet": { speciesTags:["homo-sapiens"], cultureTags:["aurinaciense","gravetiense","paleolitico-superior"], focus:"upper-paleolithic" },
+    "Dolní Věstonice": { speciesTags:["homo-sapiens"], cultureTags:["gravetiense","paleolitico-superior"], focus:"upper-paleolithic" },
+    "Jebel Irhoud": { speciesTags:["homo-sapiens"], cultureTags:["middle-stone-age"], focus:"sapiens-early" },
+    "Omo Kibish": { speciesTags:["homo-sapiens"], cultureTags:["middle-stone-age"], focus:"sapiens-early" },
+    "West Turkana · Black Skull": { speciesTags:["paranthropus-aethiopicus","paranthropus"], focus:"pre-sapiens" }
+  };
+  const disputedTaxa = ["homo-antecessor", "homo-heidelbergensis", "homo-rhodesiensis", "homo-sp", "denisovanos", "homo-naledi", "homo-floresiensis", "homo-luzonensis"];
+  window.ARCH_DATA.SITES.forEach((site, i) => {
+    const extra = manual[site.name] || {};
+    site.id = site.id || `site-${i}-${site.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-')}`;
+    site.periodTags = extra.periodTags || periodByGroup[site.group] || [];
+    site.speciesTags = extra.speciesTags || [];
+    site.cultureTags = extra.cultureTags || [];
+    site.routeTags = extra.routeTags || [];
+    site.focus = extra.focus || (site.speciesTags.includes("homo-sapiens") ? (site.cultureTags.includes("paleolitico-superior") || site.cultureTags.includes("aurinaciense") || site.cultureTags.includes("gravetiense") ? "upper-paleolithic" : "sapiens-early") : "pre-sapiens");
+    site.taxonomicNote = site.taxonomicNote || (site.speciesTags.some(t => disputedTaxa.includes(t))
+      ? "Nota taxonómica: la atribución o delimitación de este taxón/linaje es discutida en la literatura y debe leerse como una simplificación didáctica."
+      : "");
+  });
+})();
+
+
+/* ===== js/data-areas.js ===== */
+window.ARCH_DATA = window.ARCH_DATA || {};
+window.ARCH_DATA.GROUP_COLORS = {
+    "Plioceno": "#f5c542",
+    "Pleistoceno Inferior": "#7ec9a6",
+    "Pleistoceno Medio": "#e1727a",
+    "Pleistoceno Superior": "#5fb4d9"
+  };
+
+window.ARCH_DATA.SPECIES_AREAS = [
+    { name: "Ardipithecus ramidus", color: "#8dd3c7", type: "circle", center: [10.5, 40.5], radius: 320000, period: "~4,4 Ma", note: "Middle Awash, Etiopía; área esquemática." },
+    { name: "Australopithecus anamensis", color: "#ffffb3", type: "circle", center: [2.5, 36.0], radius: 520000, period: "4,2–3,9 Ma", note: "Turkana–Etiopía; distribución aproximada." },
+    { name: "Australopithecus afarensis", color: "#bebada", type: "circle", center: [4.0, 38.0], radius: 950000, period: "3,9–2,9 Ma", note: "África oriental: Etiopía, Kenia, Tanzania." },
+    { name: "Australopithecus africanus", color: "#fb8072", type: "circle", center: [-26.3, 27.4], radius: 430000, period: "3,0–2,2 Ma", note: "Cradle of Humankind y sitios sudafricanos." },
+    { name: "Paranthropus boisei", color: "#80b1d3", type: "circle", center: [-0.5, 36.0], radius: 1050000, period: "2,3–1,2 Ma", note: "África oriental." },
+    { name: "Paranthropus robustus", color: "#fdb462", type: "circle", center: [-26.1, 27.7], radius: 350000, period: "2,0–1,2 Ma", note: "Sudáfrica." },
+    { name: "Homo habilis / rudolfensis", color: "#b3de69", type: "circle", center: [0.5, 36.2], radius: 1150000, period: "2,4–1,5 Ma", note: "África oriental y meridional, esquemático." },
+    { name: "Homo ergaster / erectus", color: "#fccde5", type: "multiCircle", circles: [[-1.0,36.0,1300000],[41.4,44.2,450000],[39.7,116.0,650000],[-7.4,111.0,520000]], period: "1,9 Ma–100 ka", note: "África, Cáucaso, Asia oriental e Indonesia; no es un contorno taxonómico exacto." },
+    { name: "Homo antecessor", color: "#bc80bd", type: "circle", center: [40.2, -3.2], radius: 650000, period: "~1,2–0,8 Ma", note: "Iberia/Europa occidental temprana, esquemático." },
+    { name: "Homo heidelbergensis / rhodesiensis", color: "#ccebc5", type: "multiCircle", circles: [[10,20,1800000],[47,8,1200000],[33,35,650000]], period: "700–200 ka", note: "África, Europa y Levante: categoría taxonómica discutida." },
+    { name: "Homo neanderthalensis", color: "#ffed6f", type: "polygon", points: [[36,-10],[36,45],[48,70],[56,60],[60,20],[56,-5],[47,-12]], period: "350–40 ka", note: "Europa y Asia occidental; límites muy aproximados." },
+    { name: "Denisovanos", color: "#9ecae1", type: "multiCircle", circles: [[51.4,84.7,550000],[35,95,900000],[25,105,1100000],[-5,125,1300000]], period: "~200–30 ka", note: "Inferido por ADN/fósiles: Altái, Tíbet, Asia oriental y sudoriental." },
+    { name: "Homo naledi", color: "#fdae6b", type: "circle", center: [-26.0, 27.7], radius: 220000, period: "335–236 ka", note: "África austral." },
+    { name: "Homo floresiensis", color: "#a1d99b", type: "circle", center: [-8.5, 120.45], radius: 180000, period: "100–50 ka", note: "Isla de Flores." },
+    { name: "Homo luzonensis", color: "#dadaeb", type: "circle", center: [18.0, 121.8], radius: 180000, period: "67–50 ka", note: "Luzón." }
+  ];
+
+window.ARCH_DATA.CULTURE_AREAS = [
+    { name: "Lomekwiense", color: "#7fc97f", type: "circle", center: [4.1, 35.8], radius: 260000, period: "~3,3 Ma", note: "Turkana occidental." },
+    { name: "Olduvayense / Oldowan", color: "#beaed4", type: "multiCircle", circles: [[1,36,1250000],[-26,28,450000],[41.3,44.2,350000],[40.1,114.6,500000]], period: "2,6–1,5 Ma", note: "Tecnología de Modo 1 en África y Eurasia temprana." },
+    { name: "Achelense", color: "#fdc086", type: "polygon", points: [[-35,-20],[-35,50],[5,80],[32,78],[55,20],[50,-10],[5,-20]], period: "1,7 Ma–200 ka", note: "Amplio halo de bifaces; la distribución real es discontinua." },
+    { name: "Acheulo-Yabrudiense", color: "#ffff99", type: "circle", center: [32.5, 35.0], radius: 450000, period: "420–200 ka", note: "Levante." },
+    { name: "Musteriense", color: "#386cb0", type: "polygon", points: [[30,-12],[31,45],[45,65],[56,55],[58,5],[48,-12]], period: "300–40 ka", note: "Europa, Levante y Asia occidental; asociado sobre todo a neandertales y también a H. sapiens temprano." },
+    { name: "Chatelperroniense", color: "#f0027f", type: "circle", center: [46.5, 2.0], radius: 700000, period: "45–35 ka", note: "Francia y norte de Iberia, esquemático." },
+    { name: "Middle Stone Age africano", color: "#bf5b17", type: "multiCircle", circles: [[-30,22,900000],[9,39,900000],[31,-8,500000]], period: "300–40 ka", note: "África: halo esquemático; incluye conjuntos de H. sapiens temprano." }
+  ];
+
+
+/* ===== js/data-routes.js ===== */
+window.ARCH_DATA = window.ARCH_DATA || {};
+window.ARCH_DATA.DISPERSAL_ROUTES = [
+  {
+    id: "route-australopithecus",
+    label: "Australopithecus",
+    color: "#8e63ce",
+    period: "~4,2–2,2 Ma",
+    confidence: "media-baja",
+    note: "Corredor didáctico entre África oriental y meridional. No representa una ruta única ni un movimiento lineal.",
+    paths: [ [[4.4,36.2],[0.7,36.4],[-2.8,36.0],[-25.9,27.8]] ]
+  },
+  {
+    id: "route-erectus",
+    label: "Homo ergaster / erectus",
+    color: "#d35b1f",
+    period: "~1,9 Ma–100 ka",
+    confidence: "media",
+    note: "Out of Africa I: corredor aproximado desde África oriental hacia el Cáucaso, Asia oriental e Indonesia.",
+    paths: [ [[-2.5,35.3],[12.0,39.0],[31.8,35.2],[41.34,44.20]], [[41.34,44.20],[34.5,69.2],[28.6,77.2],[39.9,116.4]], [[39.9,116.4],[27.7,112.9],[-7.5,110.8]] ]
+  },
+  {
+    id: "route-heidelbergensis",
+    label: "H. heidelbergensis / linajes medios",
+    color: "#2d7dd2",
+    period: "~600–200 ka",
+    confidence: "media-baja",
+    note: "Esquema de expansión pleistocena media entre África, Levante y Europa. La taxonomía H. heidelbergensis/rhodesiensis es debatida.",
+    paths: [ [[-12.8,28.2],[0.0,35.0],[31.8,35.2],[42.35,-3.52],[52.15,10.78]] ]
+  },
+  {
+    id: "route-neanderthals",
+    label: "Neandertales",
+    color: "#6d6875",
+    period: "~350–28 ka",
+    confidence: "alta-media",
+    note: "Distribución aproximada por Europa, Levante y Asia occidental. Las flechas son una guía visual, no una trayectoria precisa.",
+    paths: [ [[48.0,-4.0],[44.0,7.0],[41.9,12.5],[36.2,36.2],[35.0,45.0]], [[48.0,-4.0],[50.0,20.0],[51.4,84.7]] ]
+  },
+  {
+    id: "route-denisovans",
+    label: "Denisovanos",
+    color: "#00897b",
+    period: "~200–30 ka",
+    confidence: "baja-media",
+    note: "Presencia inferida sobre todo por genética antigua y restos fragmentarios; la extensión espacial es altamente provisional.",
+    paths: [ [[51.4,84.7],[43.8,87.6],[31.2,121.4],[14.6,121.0]] ]
+  },
+  {
+    id: "route-island-hominins",
+    label: "Homininos insulares",
+    color: "#f4a261",
+    period: "Pleistoceno tardío",
+    confidence: "baja",
+    note: "Esquema de dispersión insular en Wallacea y Luzón. No implica una ruta comprobada punto a punto.",
+    paths: [ [[-6.2,106.8],[-8.5,121.0]], [[14.6,121.0],[17.8,121.7]] ]
+  }
+];
+
+
+/* ===== js/utils.js ===== */
+window.ARCH = window.ARCH || {};
+ARCH.Utils = {
+  escapeHTML(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  },
+  escapeAttr(value) {
+    return this.escapeHTML(value).replace(/'/g, "&#39;");
+  },
+  formatYear(y) {
+    if (y === 0) return "Presente";
+    const abs = Math.abs(y);
+    if (abs >= 1000000) return `${(abs / 1000000).toFixed(2).replace(/\.?0+$/, "")} Ma`;
+    if (abs >= 1000) return `${Math.round(abs / 1000).toLocaleString("es")} ka`;
+    return `${abs.toLocaleString("es")} a.`;
+  },
+  intersects(a = [], b = []) {
+    const set = new Set(a);
+    return b.some(x => set.has(x));
+  },
+  timelineMatchesSite(row, site) {
+    const speciesMatch = this.intersects(row.speciesTags || [], site.speciesTags || []);
+    const cultureMatch = this.intersects(row.cultureTags || [], site.cultureTags || []);
+    const periodMatch = this.intersects(row.periodTags || [], site.periodTags || []);
+    const routeMatch = this.intersects(row.routeTags || [], site.routeTags || []);
+    if (row.category === "era" || row.category === "paleo") return periodMatch || cultureMatch;
+    if (row.category === "hominino") return speciesMatch || routeMatch;
+    if (row.category === "cultura") return cultureMatch;
+    return speciesMatch || cultureMatch || periodMatch || routeMatch;
+  },
+  activeFocusFilters() {
+    return {
+      "pre-sapiens": document.getElementById("filter-pre-sapiens")?.checked ?? true,
+      "sapiens-early": document.getElementById("filter-sapiens-early")?.checked ?? false,
+      "upper-paleolithic": document.getElementById("filter-upper-paleolithic")?.checked ?? false
+    };
+  },
+  isSiteVisibleByFocus(site) {
+    const filters = this.activeFocusFilters();
+    return Boolean(filters[site.focus || "pre-sapiens"]);
+  }
+};
+
+
+/* ===== js/site-panel.js ===== */
+window.ARCH = window.ARCH || {};
+ARCH.SitePanel = {
+  init() {
+    this.panel = document.getElementById("site-panel");
+  },
+  renderEmpty() {
+    if (!this.panel) return;
+    this.panel.innerHTML = `<div class="empty-panel"><h2>Ficha del yacimiento</h2><p>Seleccioná un marcador del mapa o una fila del timeline para ver información completa.</p></div>`;
+  },
+  render(site) {
+    const U = ARCH.Utils;
+    if (!this.panel || !site) return this.renderEmpty();
+    const color = (ARCH_DATA.GROUP_COLORS || {})[site.group] || "#777";
+    const image = site.img ? `
+      <div class="site-image-wrap">
+        <img class="site-image" src="${U.escapeAttr(site.img)}" alt="${U.escapeAttr(site.name)}" loading="lazy" onerror="this.closest('.site-image-wrap').innerHTML='<div class=&quot;image-placeholder&quot;>Foto no disponible para insertar. Use los enlaces de fotos o la fuente oficial.</div>'" />
+        ${site.imgCredit ? `<div class="photo-credit">${site.imgSource ? `<a href="${U.escapeAttr(site.imgSource)}" target="_blank" rel="noopener noreferrer">Foto / fuente visual: ${U.escapeHTML(site.imgCredit)}</a>` : `Foto / fuente visual: ${U.escapeHTML(site.imgCredit)}`}</div>` : ""}
+      </div>` : `<div class="image-placeholder">Foto no disponible para insertar. Use los enlaces de fotos o la fuente oficial.</div>`;
+    const links = Array.isArray(site.externalPhotos) && site.externalPhotos.length
+      ? `<div class="photo-links">${site.externalPhotos.map(p => `<a href="${U.escapeAttr(p.url)}" target="_blank" rel="noopener noreferrer">${U.escapeHTML(p.label)}</a>`).join("")}</div>` : "";
+    const tagRow = [
+      ...(site.speciesTags || []).slice(0, 3),
+      ...(site.cultureTags || []).slice(0, 3),
+      ...(site.routeTags || []).slice(0, 2)
+    ].map(tag => `<span class="tag-chip">${U.escapeHTML(tag)}</span>`).join("");
+    this.panel.innerHTML = `
+      ${image}
+      <span class="pill" style="background:${color};">${U.escapeHTML(site.group)}</span>
+      <div class="site-title"><h2>${U.escapeHTML(site.name)} · ${U.escapeHTML(site.country)}</h2></div>
+      <div class="panel-meta">
+        <div><b>Datación:</b> ${U.escapeHTML(site.periodo)} <span class="source-note">(${U.formatYear(site.from)}–${U.formatYear(site.to)})</span></div>
+        <div><b>Especie / taxón:</b> ${U.escapeHTML(site.species || "—")}</div>
+        <div><b>Cultura / tecnología:</b> ${U.escapeHTML(site.culture || "—")}</div>
+        <div><b>Hallazgos principales:</b> ${U.escapeHTML(site.hallazgos || "—")}</div>
+        <div><b>Años de hallazgo / excavación:</b> ${U.escapeHTML(site.excavacion || "—")}</div>
+        <div><b>Investigadores:</b> ${U.escapeHTML(site.investigadores || "—")}</div>
+      </div>
+      ${site.taxonomicNote ? `<div class="taxonomy-note">${U.escapeHTML(site.taxonomicNote)}</div>` : ""}
+      ${tagRow ? `<div class="tag-row">${tagRow}</div>` : ""}
+      ${links}
+      <div class="panel-note">${U.escapeHTML(site.datos || "")}</div>
+      ${site.source ? `<div class="source-note"><a href="${U.escapeAttr(site.source)}" target="_blank" rel="noopener noreferrer">Fuente / ficha oficial</a></div>` : ""}
+    `;
+  }
+};
+
+
+/* ===== js/map.js ===== */
+window.ARCH = window.ARCH || {};
+ARCH.Map = {
+  init() {
+    this.map = L.map("map", { center: [18, 18], zoom: 2, minZoom: 2, worldCopyJump: true, scrollWheelZoom: true });
+    window.__archMap = this.map;
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png", {
+      attribution: "© OpenStreetMap, © CARTO", subdomains: "abcd", maxZoom: 18
+    }).addTo(this.map);
+    this.siteMarkers = [];
+    this.routeLayers = new Map();
+    this.speciesLayer = L.layerGroup().addTo(this.map);
+    this.cultureLayer = L.layerGroup().addTo(this.map);
+    this.routesLayer = L.layerGroup().addTo(this.map);
+    this.buildAreas();
+    this.buildRoutes();
+    this.buildMarkers();
+    this.buildRouteFilters();
+    this.buildLegend();
+    this.bindLayerControls();
+    this.applyFocusFilters();
+    requestAnimationFrame(() => this.map.invalidateSize());
+  },
+  buildAreas() {
+    (ARCH_DATA.SPECIES_AREAS || []).forEach(area => this.addApproxArea(area, this.speciesLayer, 0.12));
+    (ARCH_DATA.CULTURE_AREAS || []).forEach(area => this.addApproxArea(area, this.cultureLayer, 0.10));
+  },
+  addApproxArea(area, target, opacityBase) {
+    const style = { color: area.color, weight: 1.5, fillColor: area.color, fillOpacity: opacityBase, opacity: 0.78, interactive: true };
+    const bind = layer => {
+      layer.bindTooltip(`<div class="area-tooltip"><b>${ARCH.Utils.escapeHTML(area.name)}</b><br>${ARCH.Utils.escapeHTML(area.period || "")}<br>${ARCH.Utils.escapeHTML(area.note || "Halo aproximado")}</div>`, { sticky: true, direction: "top", opacity: .95 });
+      layer.on("mouseover", () => layer.setStyle({ fillOpacity: opacityBase + .12, weight: 2.4 }));
+      layer.on("mouseout", () => layer.setStyle(style));
+      target.addLayer(layer);
+    };
+    if (area.type === "circle") bind(L.circle(area.center, { radius: area.radius, ...style }));
+    if (area.type === "multiCircle") area.circles.forEach(([lat, lng, radius]) => bind(L.circle([lat, lng], { radius, ...style })));
+    if (area.type === "polygon") bind(L.polygon(area.points, style));
+  },
+  bearing(a, b) {
+    const lat1 = a[0] * Math.PI / 180, lat2 = b[0] * Math.PI / 180, dLon = (b[1] - a[1]) * Math.PI / 180;
+    const y = Math.sin(dLon) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+    return Math.atan2(y, x) * 180 / Math.PI;
+  },
+  buildRoutes() {
+    (ARCH_DATA.DISPERSAL_ROUTES || []).forEach(route => {
+      const group = L.layerGroup();
+      route.paths.forEach(path => {
+        const line = L.polyline(path, { color: route.color, weight: 3, opacity: .86, dashArray: "10 7", lineCap: "round" });
+        line.bindTooltip(`<div class="area-tooltip"><b>${ARCH.Utils.escapeHTML(route.label)}</b><br>${ARCH.Utils.escapeHTML(route.period)} · confianza ${ARCH.Utils.escapeHTML(route.confidence)}<br>${ARCH.Utils.escapeHTML(route.note)}</div>`, { sticky: true, direction: "top", opacity: .96 });
+        group.addLayer(line);
+        for (let i = 1; i < path.length; i++) {
+          const prev = path[i - 1], curr = path[i];
+          const mid = [(prev[0] + curr[0]) / 2, (prev[1] + curr[1]) / 2];
+          const angle = this.bearing(prev, curr);
+          group.addLayer(L.marker(mid, { icon: L.divIcon({ className: "route-arrow", html: `<div class="route-arrow-shape" style="color:${route.color}; transform: rotate(${angle}deg);">➜</div>`, iconSize: [20,20], iconAnchor: [10,10] }), interactive: false }));
+        }
+      });
+      this.routeLayers.set(route.id, group);
+      this.routesLayer.addLayer(group);
+    });
+  },
+  buildMarkers() {
+    (ARCH_DATA.SITES || []).forEach(site => {
+      const color = ARCH_DATA.GROUP_COLORS[site.group] || "#777";
+      const marker = L.marker([site.lat, site.lng], {
+        icon: L.divIcon({ className: "", html: `<div class="site-marker" style="width:18px;height:18px;background:${color};"></div>`, iconSize: [18,18], iconAnchor: [9,9] })
+      }).addTo(this.map);
+      marker.__site = site;
+      marker.bindTooltip(`${ARCH.Utils.escapeHTML(site.name)} · ${ARCH.Utils.escapeHTML(site.country)}`, { sticky: true, direction: "top", opacity: .95 });
+      marker.on("mouseover", () => this.previewSite(marker));
+      marker.on("click", () => this.selectSite(marker, true));
+      marker.on("mouseout", () => { if (!this.lockedMarker) this.clearTransient(); });
+      this.siteMarkers.push(marker);
+    });
+    if (this.siteMarkers.length) this.selectSite(this.siteMarkers[0], false);
+  },
+  buildRouteFilters() {
+    const box = document.getElementById("route-filters");
+    if (!box) return;
+    box.innerHTML = (ARCH_DATA.DISPERSAL_ROUTES || []).map(route => `
+      <label title="${ARCH.Utils.escapeAttr(route.note)}"><input type="checkbox" class="route-toggle" data-route="${route.id}" checked />
+      <span class="swatch" style="background:${route.color}"></span>${ARCH.Utils.escapeHTML(route.label)}</label>`).join("");
+    box.querySelectorAll(".route-toggle").forEach(input => input.addEventListener("change", () => this.applyRouteToggles()));
+  },
+  applyRouteToggles() {
+    document.querySelectorAll(".route-toggle").forEach(input => {
+      const layer = this.routeLayers.get(input.dataset.route);
+      if (!layer) return;
+      if (input.checked) this.routesLayer.addLayer(layer); else this.routesLayer.removeLayer(layer);
+    });
+  },
+  buildLegend() {
+    const box = document.getElementById("map-legend");
+    if (!box) return;
+    const groups = Object.entries(ARCH_DATA.GROUP_COLORS || {}).map(([k, v]) => `<span class="legend-item"><span class="swatch" style="background:${v}"></span>Yacimiento: ${ARCH.Utils.escapeHTML(k)}</span>`).join("");
+    box.innerHTML = `${groups}<span class="legend-item"><span class="swatch" style="background:#8dd3c7"></span>Área de especie</span><span class="legend-item"><span class="swatch" style="background:#386cb0"></span>Área cultural</span><span class="legend-item"><span class="swatch" style="background:#d35b1f"></span>Ruta hipotética</span>`;
+  },
+  bindLayerControls() {
+    const bind = (id, layer) => document.getElementById(id)?.addEventListener("change", e => e.target.checked ? layer.addTo(this.map) : this.map.removeLayer(layer));
+    bind("toggle-species-areas", this.speciesLayer);
+    bind("toggle-culture-areas", this.cultureLayer);
+    bind("toggle-dispersal-routes", this.routesLayer);
+    ["filter-pre-sapiens", "filter-sapiens-early", "filter-upper-paleolithic"].forEach(id => document.getElementById(id)?.addEventListener("change", () => this.applyFocusFilters()));
+  },
+  markerNode(marker) { const el = marker.getElement && marker.getElement(); return el ? (el.firstElementChild || el) : null; },
+  setMarkerState(marker, state) {
+    const node = this.markerNode(marker); if (!node) return;
+    node.classList.remove("is-dim", "is-match", "is-selected");
+    if (state === "dim") node.classList.add("is-dim");
+    if (state === "match") node.classList.add("is-match");
+    if (state === "selected") node.classList.add("is-selected");
+  },
+  applyFocusFilters() {
+    this.siteMarkers.forEach(marker => {
+      const show = ARCH.Utils.isSiteVisibleByFocus(marker.__site);
+      if (show && !this.map.hasLayer(marker)) marker.addTo(this.map);
+      if (!show && this.map.hasLayer(marker)) this.map.removeLayer(marker);
+    });
+    this.clearTransient();
+  },
+  previewSite(marker) {
+    this.highlightPeriodForSite(marker.__site);
+    ARCH.SitePanel.render(marker.__site);
+    this.setMarkerState(marker, "match");
+    marker.setZIndexOffset(1000);
+  },
+  selectSite(marker, pan) {
+    this.lockedMarker = marker;
+    this.clearTransient();
+    this.setMarkerState(marker, "selected");
+    marker.setZIndexOffset(1200);
+    ARCH.SitePanel.render(marker.__site);
+    this.highlightPeriodForSite(marker.__site);
+    if (pan) this.map.panInside(marker.getLatLng(), { paddingTopLeft: [34,34], paddingBottomRight: [34,34] });
+    ARCH.App?.setSummary?.(`Yacimiento seleccionado: ${marker.__site.name} (${marker.__site.periodo}).`);
+  },
+  clearTransient() {
+    this.siteMarkers.forEach(marker => {
+      if (marker === this.lockedMarker) this.setMarkerState(marker, "selected"); else this.setMarkerState(marker, "normal");
+      marker.setZIndexOffset(marker === this.lockedMarker ? 1200 : 0);
+    });
+  },
+  clearSelection() {
+    this.lockedMarker = null;
+    this.clearTransient();
+  },
+  highlightSitesForTimeline(row, persistent = false) {
+    let count = 0;
+    this.siteMarkers.forEach(marker => {
+      if (!this.map.hasLayer(marker)) return;
+      const ok = ARCH.Utils.timelineMatchesSite(row, marker.__site);
+      this.setMarkerState(marker, ok ? "match" : "dim");
+      marker.setZIndexOffset(ok ? 1000 : 0);
+      if (ok) count++;
+    });
+    this.highlightRoutes(row.routeTags || []);
+    if (persistent) this.lockedMarker = null;
+    ARCH.App?.setSummary?.(`${row.name}: ${count} yacimiento(s) asociados en los filtros activos.`);
+  },
+  highlightRoutes(routeTags) {
+    document.querySelectorAll(".route-toggle").forEach(input => {
+      if (!routeTags.length) return;
+      input.checked = routeTags.includes(input.dataset.route);
+    });
+    if (routeTags.length) this.applyRouteToggles();
+  },
+  highlightPeriodForSite(site) { ARCH.Timeline?.highlightPeriod?.(site.from, site.to, `${site.name} · ${ARCH.Utils.formatYear(site.from)}–${ARCH.Utils.formatYear(site.to)}`); },
+  invalidate() { this.map?.invalidateSize(); }
+};
+
+
+/* ===== js/timeline.js ===== */
+window.ARCH = window.ARCH || {};
+ARCH.Timeline = {
+  domain: [-4500000, 0],
+  rowHeight: 14,
+  rowGap: 2,
+  margin: { top: 28, right: 24, bottom: 26, left: 245 },
+  init() { this.svg = document.getElementById("timeline"); this.tip = document.getElementById("tip"); this.build(); },
+  xScale(year) {
+    const [min, max] = this.domain;
+    const t = (year - min) / (max - min);
+    return this.margin.left + t * this.innerWidth;
+  },
+  build() {
+    const svg = this.svg;
+    const width = Math.max(svg.parentElement.clientWidth || 0, 980);
+    this.innerWidth = width - this.margin.left - this.margin.right;
+    const totalRows = ARCH_DATA.TIMELINE_ROWS.length + ARCH_DATA.ROW_CATEGORIES.length;
+    const innerHeight = totalRows * (this.rowHeight + this.rowGap);
+    const height = this.margin.top + innerHeight + this.margin.bottom;
+    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    svg.setAttribute("width", width);
+    svg.setAttribute("height", height);
+    svg.innerHTML = "";
+    const ns = "http://www.w3.org/2000/svg";
+    const ce = (name, attrs = {}, parent = svg, text = null) => {
+      const el = document.createElementNS(ns, name);
+      Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
+      if (text != null) el.textContent = text;
+      parent.appendChild(el);
+      return el;
+    };
+    const ticks = [-4500000,-4000000,-3500000,-3000000,-2500000,-2000000,-1500000,-1000000,-500000,0];
+    ticks.forEach(tick => {
+      const x = this.xScale(tick);
+      ce("line", { x1:x, x2:x, y1:this.margin.top-8, y2:this.margin.top+innerHeight, class:"grid-line" });
+      ce("text", { x, y:this.margin.top+innerHeight+22, "text-anchor":"middle", class:"axis-label" }, svg, tick === 0 ? "Hoy" : `${(tick/1e6).toFixed(1).replace('.0','')} Ma`);
+    });
+    let y = this.margin.top;
+    ARCH_DATA.ROW_CATEGORIES.forEach(cat => {
+      ce("rect", { x:0, y:y-2, width, height:this.rowHeight, fill:cat.color, opacity:.12 });
+      ce("text", { x:12, y:y+this.rowHeight/2, class:"row-label cat" }, svg, "▸ " + cat.label);
+      y += this.rowHeight + this.rowGap;
+      ARCH_DATA.TIMELINE_ROWS.filter(r => r.category === cat.id).forEach((row, idx) => {
+        const group = ce("g", { class:"timeline-row", tabindex:"0", "data-row-id":row.id });
+        const bg = ce("rect", { x:0, y:y-2, width, height:this.rowHeight, class:"row-bg" + (idx % 2 ? " alt" : "") }, group);
+        ce("text", { x:this.margin.left-8, y:y+this.rowHeight/2, "text-anchor":"end", class:"row-label" }, group, row.name);
+        const x1 = this.xScale(row.from), x2 = this.xScale(row.to);
+        ce("rect", { x:x1, y:y+2, width:Math.max(2,x2-x1), height:Math.max(6,this.rowHeight-4), rx:2, ry:2, fill:row.color, class:"bar" }, group);
+        const enter = () => this.previewRow(row, group, bg);
+        const leave = () => { if (this.lockedRow !== row) this.clearPreview(); };
+        group.addEventListener("mouseenter", enter);
+        group.addEventListener("mouseleave", leave);
+        group.addEventListener("focus", enter);
+        group.addEventListener("blur", leave);
+        group.addEventListener("click", () => this.selectRow(row, group, bg));
+        y += this.rowHeight + this.rowGap;
+      });
+    });
+    ce("rect", { x:0, y:this.margin.top-6, width:0, height:innerHeight+12, class:"highlight-band", id:"highlight-band" });
+    ce("text", { x:0, y:this.margin.top-12, "text-anchor":"middle", class:"highlight-label", id:"highlight-label" }, svg, "");
+    this.bounds = { top:this.margin.top-6, height:innerHeight+12 };
+  },
+  previewRow(row, group, bg) {
+    this.activateGroup(group, bg);
+    this.highlightPeriod(row.from, row.to, `${row.name} · ${ARCH.Utils.formatYear(row.from)}–${ARCH.Utils.formatYear(row.to)}`);
+    this.showTip(row, row.from, row.to);
+    ARCH.Map?.highlightSitesForTimeline?.(row, false);
+  },
+  selectRow(row, group, bg) {
+    this.lockedRow = row;
+    this.activateGroup(group, bg);
+    this.highlightPeriod(row.from, row.to, `${row.name} · ${ARCH.Utils.formatYear(row.from)}–${ARCH.Utils.formatYear(row.to)}`);
+    this.showTip(row, row.from, row.to);
+    ARCH.Map?.highlightSitesForTimeline?.(row, true);
+  },
+  activateGroup(group, bg) {
+    this.svg.querySelectorAll(".timeline-row").forEach(g => g.classList.remove("is-active"));
+    this.svg.querySelectorAll(".row-bg.active").forEach(r => r.classList.remove("active"));
+    group?.classList.add("is-active"); bg?.classList.add("active");
+  },
+  clearPreview() {
+    if (!this.lockedRow) {
+      this.clearHighlight();
+      this.hideTip();
+      this.svg.querySelectorAll(".timeline-row").forEach(g => g.classList.remove("is-active"));
+      this.svg.querySelectorAll(".row-bg.active").forEach(r => r.classList.remove("active"));
+      ARCH.Map?.clearTransient?.();
+    }
+  },
+  clearSelection() { this.lockedRow = null; this.clearPreview(); },
+  highlightPeriod(from, to, label) {
+    const band = document.getElementById("highlight-band"), txt = document.getElementById("highlight-label");
+    if (!band || !txt) return;
+    const x1 = this.xScale(Math.max(from, this.domain[0])), x2 = this.xScale(Math.min(to, this.domain[1]));
+    const w = Math.max(3, x2 - x1);
+    band.setAttribute("x", x1); band.setAttribute("width", w); band.setAttribute("y", this.bounds.top); band.setAttribute("height", this.bounds.height); band.classList.add("active");
+    txt.setAttribute("x", x1 + w/2); txt.setAttribute("y", this.bounds.top - 6); txt.textContent = label; txt.classList.add("active");
+  },
+  clearHighlight() { document.getElementById("highlight-band")?.classList.remove("active"); document.getElementById("highlight-label")?.classList.remove("active"); },
+  rowTipHTML(row) {
+    return `<strong>${ARCH.Utils.escapeHTML(row.name)}</strong><div><b>Cronología:</b> ${ARCH.Utils.formatYear(row.from)} → ${ARCH.Utils.formatYear(row.to)}</div><div style="margin-top:4px;">${ARCH.Utils.escapeHTML(row.details)}</div><div class="meta"><b>Cultura asociada:</b> ${ARCH.Utils.escapeHTML(row.cultura || "—")}</div>`;
+  },
+  showTip(row, from, to) {
+    const tip = this.tip; if (!tip) return;
+    tip.innerHTML = this.rowTipHTML(row); tip.classList.add("show", "timeline-anchored");
+    requestAnimationFrame(() => this.positionTipLeftOfPeriod(from, to));
+  },
+  hideTip() { this.tip?.classList.remove("show", "timeline-anchored"); },
+  positionTipLeftOfPeriod(from, to) {
+    const rect = this.svg.getBoundingClientRect();
+    const x1 = this.xScale(Math.max(from, this.domain[0])), x2 = this.xScale(Math.min(to, this.domain[1]));
+    const bandLeft = rect.left + Math.min(x1, x2), bandRight = rect.left + Math.max(x1, x2);
+    const w = this.tip.offsetWidth || 300, h = this.tip.offsetHeight || 120, pad = 12;
+    let left = bandLeft - w - pad; if (left < pad) left = Math.min(window.innerWidth - w - pad, bandRight + pad);
+    let top = rect.top + rect.height/2 - h/2; top = Math.max(pad, Math.min(top, window.innerHeight - h - pad));
+    this.tip.style.left = `${left}px`; this.tip.style.top = `${top}px`;
+  }
+};
+
+
+/* ===== js/app.js ===== */
+window.ARCH = window.ARCH || {};
+ARCH.App = {
+  init() {
+    ARCH.SitePanel.init();
+    ARCH.Map.init();
+    ARCH.Timeline.init();
+    this.buildTimelineLegend();
+    this.bindModeTabs();
+    document.getElementById("clear-selection")?.addEventListener("click", () => this.clearSelection());
+    window.addEventListener("resize", () => {
+      clearTimeout(this.resizeTimer);
+      this.resizeTimer = setTimeout(() => { ARCH.Timeline.build(); ARCH.Map.invalidate(); }, 120);
+    });
+  },
+  buildTimelineLegend() {
+    const box = document.getElementById("timeline-legend");
+    if (!box) return;
+    box.innerHTML = (ARCH_DATA.ROW_CATEGORIES || []).map(cat => `<span class="legend-item"><span class="swatch" style="background:${cat.color}"></span>${ARCH.Utils.escapeHTML(cat.label)}</span>`).join("");
+  },
+  bindModeTabs() {
+    document.querySelectorAll("[data-mode-button]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const mode = btn.dataset.modeButton;
+        document.body.dataset.mode = mode;
+        document.querySelectorAll("[data-mode-button]").forEach(b => b.classList.toggle("is-active", b === btn));
+        setTimeout(() => { ARCH.Map.invalidate(); }, 80);
+      });
+    });
+  },
+  setSummary(text) {
+    const el = document.getElementById("selection-summary");
+    if (el) el.textContent = text;
+  },
+  clearSelection() {
+    ARCH.Timeline.clearSelection();
+    ARCH.Map.clearSelection();
+    ARCH.SitePanel.renderEmpty();
+    this.setSummary("Selección limpia. Tocá una fila del timeline o un marcador del mapa.");
+  }
+};
+document.addEventListener("DOMContentLoaded", () => ARCH.App.init());
+
+  </script>
 </body>
 </html>
