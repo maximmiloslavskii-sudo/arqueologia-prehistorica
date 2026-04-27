@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Arqueología Prehistórica · Línea de Tiempo y Mapa Interactivo</title>
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <style>
+    :root {
+      --bg: #f7f7f5;
+      --card: #ffffff;
+      --ink: #222;
+      --muted: #6c6c6c;
+      --border: #e2e2e2;
+      --accent: #5a4a3a;
+
+      /* Period palette (matches the PDF) */
+      --c-plioceno: #f5c542;
+      --c-pleistoceno: #d8c66a;
+      --c-pleistoceno-inferior: #7ec9a6;
+      --c-pleistoceno-medio: #e1727a;
+      --c-pleistoceno-superior: #5fb4d9;
+      --c-paleolitico: #e89249;
+      --c-hominino: #8367c7;
+      --c-cultura: #6f6f6f;
+      --c-transicion: #c95a5e;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.45;
+    }
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+    header {
+      flex: 0 0 auto;
+      background: linear-gradient(135deg, #2e2a25, #5a4a3a);
+      color: #fff;
+      padding: 18px 24px;
+      text-align: center;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+    }
+    header h1 {
+      margin: 0 0 6px;
+      font-size: 1.7rem;
+      letter-spacing: 0.2px;
+    }
+    header p {
+      margin: 0;
+      opacity: 0.85;
+      font-size: 0.95rem;
+    }
+    main {
+      flex: 1 1 auto;
+      width: 100%;
+      max-width: 1600px;
+      min-height: 0;
+      margin: 0 auto;
+      padding: 14px 18px;
+    }
+    .dashboard {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr);
+      gap: 16px;
+      height: 100%;
+      min-height: 0;
+      align-items: stretch;
+    }
+    section.card {
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 14px;
+      margin-bottom: 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    section.card h2 {
+      margin: 0 0 3px;
+      font-size: 1.15rem;
+      color: var(--accent);
+    }
+    section.card .subtitle {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 0.84rem;
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px 10px;
+      margin: 0 0 8px;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .legend .item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .legend .swatch {
+      width: 11px; height: 11px; border-radius: 4px;
+      border: 1px solid rgba(0,0,0,0.08);
+    }
+
+    /* === TIMELINE === */
+    #timeline-wrap {
+      position: relative;
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+    }
+    svg.timeline {
+      display: block;
+      min-width: 0;
+      width: 100%;
+    }
+    .row-bg { fill: #fafafa; }
+    .row-bg.alt { fill: #f1efe9; }
+    .grid-line { stroke: #ddd; stroke-width: 1; shape-rendering: crispEdges; }
+    .axis-label { font-size: 10px; fill: #555; }
+    .row-label {
+      font-size: 10.5px;
+      fill: #2b2b2b;
+      dominant-baseline: middle;
+    }
+    .row-label.cat { font-weight: 700; fill: #5a4a3a; }
+    .bar {
+      cursor: pointer;
+      transition: filter 0.15s ease, transform 0.15s ease;
+      stroke: rgba(0,0,0,0.15);
+      stroke-width: 0.5;
+    }
+    .bar:hover,
+    .bar.is-hovered {
+      filter: brightness(1.08) drop-shadow(0 2px 4px rgba(0,0,0,0.25));
+    }
+    .highlight-band {
+      fill: rgba(241, 130, 80, 0.18);
+      stroke: #d35b1f;
+      stroke-width: 1.5;
+      stroke-dasharray: 4 3;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+    .highlight-band.active { opacity: 1; }
+    .highlight-label {
+      fill: #d35b1f;
+      font-size: 11px;
+      font-weight: 700;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+    .highlight-label.active { opacity: 1; }
+
+    /* === TOOLTIP === */
+    .tip {
+      position: fixed;
+      pointer-events: none;
+      background: rgba(34, 34, 34, 0.96);
+      color: #fff;
+      padding: 10px 12px;
+      border-radius: 8px;
+      max-width: 320px;
+      font-size: 0.82rem;
+      line-height: 1.35;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+      opacity: 0;
+      transform: translate(-50%, -100%);
+      transition: opacity 0.12s ease;
+      z-index: 9999;
+    }
+    .tip.show { opacity: 1; }
+    .tip strong { display: block; margin-bottom: 4px; color: #ffd28a; }
+    .tip .meta { color: #b8b8b8; font-size: 0.75rem; margin-top: 4px; }
+
+    /* === MAP === */
+    #map {
+      flex: 1 1 auto;
+      width: 100%;
+      height: auto;
+      min-height: 0;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #eaeaea;
+    }
+    .leaflet-popup-content {
+      font-size: 0.82rem;
+      line-height: 1.35;
+      min-width: 240px;
+      max-width: 300px !important;
+    }
+    .leaflet-popup-content img {
+      width: 100%;
+      height: auto;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+      display: block;
+    }
+    .leaflet-popup-content h4 {
+      margin: 0 0 6px;
+      color: #5a4a3a;
+      font-size: 0.95rem;
+    }
+    .leaflet-popup-content .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.7rem;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+    .site-marker {
+      border-radius: 50%;
+      border: 2px solid #fff;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.25), 0 2px 6px rgba(0,0,0,0.3);
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+    .site-marker:hover { transform: scale(1.25); }
+
+    footer {
+      flex: 0 0 auto;
+      text-align: center;
+      padding: 8px 12px 12px;
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+    footer a { color: var(--accent); }
+
+    @media (max-width: 900px) {
+      html, body { height: auto; }
+      body { display: block; min-height: 100vh; overflow-x: hidden; }
+      header { padding: 18px 16px; }
+      header h1 { font-size: 1.3rem; }
+      main { padding: 16px; }
+      .dashboard { display: block; height: auto; }
+      section.card { margin-bottom: 16px; }
+      #timeline-wrap { max-height: none; min-height: 0; overflow: hidden; }
+      #map { height: 420px; min-height: 420px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Arqueología Prehistórica</h1>
+    <p>Línea de tiempo y mapa interactivo · Eras geológicas · Homínidos · Culturas líticas · Yacimientos</p>
+  </header>
+
+  <main>
+    <div class="dashboard">
+      <section class="card timeline-card">
+      <h2>Línea de tiempo</h2>
+      <p class="subtitle">
+        Pase el cursor sobre las barras para ver detalles. Al situar el cursor sobre un yacimiento del mapa,
+        aparecerá una <strong>banda vertical naranja</strong> sobre la franja temporal correspondiente.
+      </p>
+      <div class="legend" id="timeline-legend"></div>
+      <div id="timeline-wrap">
+        <svg class="timeline" id="timeline" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+      </section>
+
+      <section class="card map-card">
+      <h2>Mapa de yacimientos arqueológicos</h2>
+      <p class="subtitle">
+        Pase el cursor sobre un marcador para resaltar su periodo en la línea de tiempo.
+        Haga clic para ver una ficha detallada del yacimiento.
+      </p>
+      <div class="legend" id="map-legend"></div>
+      <div id="map"></div>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    Datos elaborados a partir de las tablas “Cronología de Eras Geológicas, Culturas y Especies de Homínidos”
+    y “Lugares de Excavación, Hallazgos y Datos Científicos de la Prehistoria”. ·
+    Mapa © <a href="https://carto.com/attributions" target="_blank">CARTO</a> ·
+    © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>
+  </footer>
+
+  <div class="tip" id="tip"></div>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  <script>
+  /* =====================================================
+     1. DATOS — Cronología (eras, homínidos y culturas)
+     ===================================================== */
+
+  // Categorías y orden de las filas (visualización tipo PDF)
+  const ROW_CATEGORIES = [
+    { id: "era",       label: "Eras geológicas",      color: "#8b6f4e" },
+    { id: "paleo",     label: "Períodos paleolíticos", color: "#e89249" },
+    { id: "hominino",  label: "Homínidos",            color: "#8367c7" },
+    { id: "cultura",   label: "Culturas líticas",     color: "#4a7e6e" }
+  ];
+
+  // Cada fila: { name, from, to, category, color, details, cultura }
+  const TIMELINE_ROWS = [
+    // === Eras geológicas ===
+    { name: "Plioceno", from: -5300000, to: -2600000, category: "era",
+      color: "var(--c-plioceno)",
+      details: "Época geológica previa al Pleistoceno. Conformación de la falla del Rift, cambios climáticos en África y aparición de los primeros homínidos como Australopithecus.",
+      cultura: "—" },
+
+    { name: "Transición Plio-Pleistoceno", from: -2800000, to: -2400000, category: "era",
+      color: "var(--c-transicion)",
+      details: "Periodo de cambios ecológicos significativos: expansión de sabanas y aridificación. Origen del Olduvayense como respuesta adaptativa y evolución del género Homo.",
+      cultura: "Olduvayense (Modo 1)" },
+
+    { name: "Pleistoceno", from: -2600000, to: -10000, category: "era",
+      color: "var(--c-pleistoceno)",
+      details: "Era de las glaciaciones; gran desarrollo del género Homo. Se divide en Inferior, Medio y Superior.",
+      cultura: "Olduvayense, Achelense, Musteriense, Paleolítico Superior" },
+
+    { name: "Pleistoceno Inferior", from: -2600000, to: -780000, category: "era",
+      color: "var(--c-pleistoceno-inferior)",
+      details: "Surgimiento del género Homo y primera salida de África.",
+      cultura: "Olduvayense (Modo 1), Achelense temprano (África)" },
+
+    { name: "Pleistoceno Medio", from: -780000, to: -130000, category: "era",
+      color: "var(--c-pleistoceno-medio)",
+      details: "Periodo de Homo heidelbergensis y formas arcaicas de Neandertal.",
+      cultura: "Achelense (Modo 2), Musteriense inicial" },
+
+    { name: "Pleistoceno Superior", from: -130000, to: -10000, category: "era",
+      color: "var(--c-pleistoceno-superior)",
+      details: "Apogeo y extinción de los Neandertales; expansión de Homo sapiens.",
+      cultura: "Musteriense, Chatelperroniense, Auriñaciense, Gravetiense, Solutrense, Magdaleniense" },
+
+    // === Períodos paleolíticos ===
+    { name: "Paleolítico Inferior", from: -2600000, to: -250000, category: "paleo",
+      color: "var(--c-paleolitico)",
+      details: "Comprende las industrias Olduvayense y Achelense; desarrollo de los primeros utensilios líticos por Homo habilis, ergaster y erectus.",
+      cultura: "Olduvayense, Achelense" },
+
+    { name: "Paleolítico Medio", from: -300000, to: -30000, category: "paleo",
+      color: "var(--c-paleolitico)",
+      details: "Dominio de la cultura Musteriense; preparación de núcleos Levallois; principalmente Neandertales y primeros Homo sapiens.",
+      cultura: "Musteriense (Modo 3)" },
+
+    { name: "Paleolítico Superior", from: -40000, to: -10000, category: "paleo",
+      color: "var(--c-paleolitico)",
+      details: "Explosión del arte rupestre, industria laminar y herramientas compuestas.",
+      cultura: "Auriñaciense, Gravetiense, Solutrense, Magdaleniense" },
+
+    // === Homínidos ===
+    { name: "Australopithecus anamensis", from: -4200000, to: -3900000, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Hominino bípedo incipiente; ancestro probable de A. afarensis.",
+      cultura: "No se asocia a industria lítica" },
+
+    { name: "Australopithecus afarensis", from: -3900000, to: -2900000, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Incluye el ejemplar 'Lucy'. Bipedismo asentado pero con hábitos arbóreos. Marcas de corte en huesos en Dikika.",
+      cultura: "Lomekwiense (posiblemente)" },
+
+    { name: "Kenyanthropus platyops", from: -3500000, to: -3300000, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Contemporáneo a A. afarensis; cara plana y rasgos dentales reducidos.",
+      cultura: "Lomekwiense (mencionado en Lomekwi)" },
+
+    { name: "Australopithecus africanus", from: -3000000, to: -2200000, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Australopiteco grácil de Sudáfrica; incluye el Niño de Taung.",
+      cultura: "Industria osteodontoquerática (propuesta por Dart, desmentida)" },
+
+    { name: "Paranthropus aethiopicus", from: -2800000, to: -2300000, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Primer miembro reconocible de los parántropos; australopiteco robusto temprano. Incluye el 'Black Skull'.",
+      cultura: "—" },
+
+    { name: "Homo habilis", from: -2500000, to: -1400000, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Primer fabricante conocido de útiles de piedra. Cerebro de ~550–680 cm³; dentición reducida.",
+      cultura: "Olduvayense" },
+
+    { name: "Homo rudolfensis", from: -2400000, to: -1700000, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Cerebro mayor (~750 cm³) y cara larga y más plana que H. habilis.",
+      cultura: "Olduvayense" },
+
+    { name: "Paranthropus boisei", from: -2200000, to: -1000000, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Desarrolló grandes molares y aparato masticador potente.",
+      cultura: "—" },
+
+    { name: "Homo ergaster / Homo erectus", from: -1800000, to: -100000, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Primera salida de África (~1,9 Ma); cráneos robustos, proporciones humanas; cerebro >800–850 cm³.",
+      cultura: "Olduvayense y Achelense" },
+
+    { name: "Homo heidelbergensis / H. rhodesiensis", from: -600000, to: -200000, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Pobladores de la Sima de los Huesos; ancestros de neandertales. Posible capacidad de lenguaje articulado y lanzas de madera (Schöningen).",
+      cultura: "Achelense (Modo 2), Musteriense inicial" },
+
+    { name: "Hombre de Denisova", from: -200000, to: -30000, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Linaje hermano de los neandertales identificado por ADN antiguo en la cueva de Denisova (Siberia). Hibridación con Homo sapiens.",
+      cultura: "—" },
+
+    { name: "Homo neanderthalensis", from: -350000, to: -28000, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Adaptado a climas fríos de Eurasia. Capacidad craneal ~1450 cm³; uso de brea de abedul.",
+      cultura: "Musteriense (Modo 3) y Chatelperroniense" },
+
+    { name: "Homo sapiens", from: -300000, to: 0, category: "hominino",
+      color: "var(--c-hominino)",
+      details: "Humanos anatómicamente modernos. Comportamiento simbólico complejo, arte narrativo y simbolismo visual.",
+      cultura: "Middle Stone Age, Musteriense inicial, Industria Laminar, Paleolítico Superior" },
+
+    // === Culturas ===
+    { name: "Industria Lomekwiense", from: -3300000, to: -2600000, category: "cultura",
+      color: "var(--c-cultura)",
+      details: "Herramientas de piedra más antiguas conocidas, halladas en Kenia.",
+      cultura: "Kenyanthropus platyops (presunto)" },
+
+    { name: "Modo 1 · Cultura Olduvayense", from: -2600000, to: -1500000, category: "cultura",
+      color: "var(--c-cultura)",
+      details: "Tecnología de cantos tallados y lascas simples. Primeras herramientas de piedra; lascas cortantes y guijarros tallados.",
+      cultura: "Homo habilis, Australopithecus garhi" },
+
+    { name: "Modo 2 · Cultura Achelense", from: -1700000, to: -200000, category: "cultura",
+      color: "var(--c-cultura)",
+      details: "Bifaces, grandes lascas y hachas de mano refinadas; simetría y planificación.",
+      cultura: "H. ergaster, H. erectus, H. heidelbergensis" },
+
+    { name: "Modo 3 · Cultura Musteriense", from: -300000, to: -30000, category: "cultura",
+      color: "var(--c-cultura)",
+      details: "Técnica Levallois; herramientas especializadas; preparación de núcleos para lascas estandarizadas.",
+      cultura: "H. neanderthalensis, H. sapiens (inicial)" }
+  ];
+
+  /* =====================================================
+     2. DATOS — Yacimientos (mapa)
+     ===================================================== */
+
+  // Cada sitio: nombre, coords, periodo (mostrar), rango (para banda vertical), grupo (color), datos
+  const SITES = [
+    {
+      name: "Dmanisi",
+      country: "República de Georgia",
+      lat: 41.336, lng: 44.207,
+      group: "Pleistoceno Inferior",
+      periodo: "Pleistoceno Inferior (~1,7–1,8 m.a.)",
+      from: -1800000, to: -1700000,
+      hallazgos: "Varios cráneos (D2280, D2282, D2700, D3444), mandíbulas, restos postcraneales y herramientas líticas del Modo 1 (olduvayenses).",
+      excavacion: "Desde 1991",
+      investigadores: "Leo Gabunia, Abesalom Vekua, David Lordkipanidze",
+      datos: "Evidencia de la primera salida de Homo fuera de África (Out of Africa I). Demuestra la dispersión de homínidos de cerebro pequeño y solidaridad social (D3444 sobrevivió sin dientes)."
+    },
+    {
+      name: "Sierra de Atapuerca · Gran Dolina",
+      country: "España",
+      lat: 42.353, lng: -3.518,
+      group: "Pleistoceno Inferior",
+      periodo: "Pleistoceno Inferior (~800.000 años)",
+      from: -900000, to: -780000,
+      img: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/41/Trinchera_del_Ferrocarril._Sierra_de_Atapuerca.jpg/640px-Trinchera_del_Ferrocarril._Sierra_de_Atapuerca.jpg",
+      hallazgos: "Más de 80 restos óseos de Homo antecessor y herramientas de piedra (TD6).",
+      excavacion: "Desde 1994",
+      investigadores: "E. Carbonell, J.L. Arsuaga, J.M. Bermúdez de Castro",
+      datos: "Definición de H. antecessor como primer europeo; patrón de dispersión humana complejo en Europa y morfología facial avanzada para su antigüedad."
+    },
+    {
+      name: "Sierra de Atapuerca · Sima de los Huesos",
+      country: "España",
+      lat: 42.355, lng: -3.521,
+      group: "Pleistoceno Medio",
+      periodo: "Pleistoceno Medio (400.000–500.000 años)",
+      from: -500000, to: -400000,
+      img: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/Homo_heidelbergensis_-_Cranium_-_Cave_Mayor_of_Atapuerca_%28Spain%29_-_Cast_-_01.jpg/640px-Homo_heidelbergensis_-_Cranium.jpg",
+      hallazgos: "Más de 5.000 restos humanos (al menos 28 individuos) de H. heidelbergensis, miles de huesos de oso (Ursus deningeri) y el bifaz \"Excalibur\".",
+      excavacion: "Iniciada en 1976",
+      investigadores: "T. Torres, E. Aguirre, E. Carbonell, J.L. Arsuaga, J.M. Bermúdez de Castro",
+      datos: "Variabilidad anatómica de H. heidelbergensis y evolución hacia neandertales. Posibles prácticas funerarias intencionales y capacidades auditivas similares al lenguaje moderno."
+    },
+    {
+      name: "Sterkfontein",
+      country: "Sudáfrica",
+      lat: -26.016, lng: 27.733,
+      group: "Plioceno",
+      periodo: "Plio-Pleistoceno (3,5–2,0 m.a.)",
+      from: -3500000, to: -2000000,
+      hallazgos: "Restos de A. africanus (Sts 5, Sts 14) y esqueleto casi completo \"Little Foot\" (StW 573).",
+      excavacion: "Década de 1930 en adelante; 1994 (Little Foot)",
+      investigadores: "Robert Broom, Ronald Clarke, Phillip Tobias",
+      datos: "Bipedismo asentado; el pie de Little Foot (con dedo gordo abducido) indica funciones prensoras arbóreas y bipedismo incompleto."
+    },
+    {
+      name: "Lomekwi · Lago Turkana",
+      country: "Kenia",
+      lat: 4.108, lng: 35.847,
+      group: "Plioceno",
+      periodo: "Plioceno (3,3–3,5 m.a.)",
+      from: -3500000, to: -3300000,
+      hallazgos: "Cráneo KNM WT 40000 y 149 herramientas de piedra (núcleos, lascas, yunques).",
+      excavacion: "1999 (cráneo); 2015 (herramientas)",
+      investigadores: "Meave Leakey, Sonia Harmand y equipo",
+      datos: "Definición de Kenyanthropus platyops; identificación de la tradición Lomekwiense, mostrando que la manufactura de herramientas precedió al género Homo."
+    },
+    {
+      name: "Schöningen",
+      country: "Alemania",
+      lat: 52.142, lng: 10.972,
+      group: "Pleistoceno Medio",
+      periodo: "Pleistoceno Medio / Paleolítico (300.000–400.000 años)",
+      from: -400000, to: -300000,
+      hallazgos: "Ocho lanzas de madera de hasta 2,5 m asociadas a abundantes huesos de caballos salvajes.",
+      excavacion: "Desde 1995–1996",
+      investigadores: "—",
+      datos: "Sofisticadas habilidades cinegéticas de H. heidelbergensis y planificación a largo plazo para fabricar armas arrojadizas; caza activa en lugar de carroñeo."
+    },
+    {
+      name: "Garganta de Olduvai",
+      country: "Tanzania",
+      lat: -2.987, lng: 35.355,
+      group: "Pleistoceno Inferior",
+      periodo: "Transición Plio-Pleistoceno (1,8–2,0 m.a.)",
+      from: -2000000, to: -1800000,
+      img: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/Olduvai_Gorge_02.jpg/640px-Olduvai_Gorge_02.jpg",
+      hallazgos: "Herramientas Oldowan, restos de Homo habilis y A. boisei, huesos de fauna con marcas de corte y fracturas.",
+      excavacion: "Décadas de 1970 y 1980",
+      investigadores: "Mary Leakey, Robert Blumenschine, Fidelis Masao",
+      datos: "Reevaluación del comportamiento homínido hacia carroñeo activo y pasivo; cuestionamiento del modelo 'hombre cazador' y propuesta de bases habitacionales."
+    },
+    {
+      name: "Cuevas de Gorham y Vanguard · Gibraltar",
+      country: "Gibraltar",
+      lat: 36.121, lng: -5.343,
+      group: "Pleistoceno Superior",
+      periodo: "Pleistoceno Tardío / Paleolítico Medio (28.000–39.000 años)",
+      from: -39000, to: -28000,
+      img: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9f/Gorham%27s_Cave.jpg/640px-Gorham%27s_Cave.jpg",
+      hallazgos: "Grabados rupestres, útiles líticos, restos de hogueras y fauna (focas, delfines, aves).",
+      excavacion: "Estudios de 2008",
+      investigadores: "Clive Finlayson, Christopher B. Stringer",
+      datos: "Pensamiento simbólico (grabados, uso de plumas) y explotación de recursos marinos en neandertales; uno de sus últimos refugios."
+    },
+    {
+      name: "Hadar",
+      country: "Etiopía",
+      lat: 11.124, lng: 40.572,
+      group: "Plioceno",
+      periodo: "Plioceno (3,0–3,7 m.a.)",
+      from: -3700000, to: -3000000,
+      hallazgos: "Esqueleto parcial AL 288-1 (\"Lucy\") y restos de la \"Primera Familia\" (AL 333).",
+      excavacion: "1974, 1975",
+      investigadores: "Donald Johanson, Maurice Taieb",
+      datos: "Definición de Australopithecus afarensis; variabilidad intraespecífica y bipedismo con retención de capacidades trepadoras."
+    },
+    {
+      name: "Gona",
+      country: "Etiopía",
+      lat: 11.181, lng: 40.500,
+      group: "Plioceno",
+      periodo: "Plio-Pleistoceno (2,5–2,6 m.a.)",
+      from: -2600000, to: -2500000,
+      hallazgos: "Herramientas de piedra tallada (lascas y núcleos) y huesos con marcas de corte.",
+      excavacion: "—",
+      investigadores: "S. Semaw y colaboradores",
+      datos: "Evidencia más antigua de tecnología Olduvayense y procesamiento sistemático de carcasas mediante fractura concoidea."
+    },
+    {
+      name: "Dikika",
+      country: "Etiopía",
+      lat: 11.108, lng: 40.594,
+      group: "Plioceno",
+      periodo: "Plioceno (3,4 m.a.)",
+      from: -3450000, to: -3350000,
+      hallazgos: "Huesos de ungulados con marcas de corte y una esquirla de piedra incrustada.",
+      excavacion: "Anuncio en 2010",
+      investigadores: "Zeresenay Alemseged y equipo",
+      datos: "Retrasó la fecha del consumo de carne y uso de herramientas en 800.000 años, atribuido posiblemente a A. afarensis."
+    },
+    {
+      name: "Kanjera Sur",
+      country: "Kenia",
+      lat: -0.310, lng: 34.397,
+      group: "Pleistoceno Inferior",
+      periodo: "Pleistoceno temprano (~2,0 m.a.)",
+      from: -2050000, to: -1950000,
+      hallazgos: "Más de 3.700 fósiles animales y 2.900 herramientas líticas.",
+      excavacion: "Anunciado en 2013",
+      investigadores: "Richard Potts, Tom Plummer, Joe Ferraro, Briana Pobiner",
+      datos: "Evidencia más temprana de consumo de carne persistente y transporte de carcasas completas a un sitio central."
+    },
+    {
+      name: "El Sidrón · Asturias",
+      country: "España",
+      lat: 43.388, lng: -5.327,
+      group: "Pleistoceno Superior",
+      periodo: "Pleistoceno (~43.000 años)",
+      from: -45000, to: -41000,
+      img: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/ca/Mand%C3%ADbula_El_Sidr%C3%B3n.jpg/640px-Mand%C3%ADbula_El_Sidr%C3%B3n.jpg",
+      hallazgos: "Restos óseos de neandertales fragmentados con ADN conservado.",
+      excavacion: "Excavación sistemática reciente",
+      investigadores: "Antonio Rosas, Carles Lalueza-Fox",
+      datos: "Diferenciación genética de neandertales; gen FOXP2 (lenguaje) y piel clara; canibalismo de supervivencia y organización en clanes."
+    },
+    {
+      name: "Taung",
+      country: "Sudáfrica",
+      lat: -27.553, lng: 24.785,
+      group: "Pleistoceno Inferior",
+      periodo: "Pleistoceno (~2,3 m.a.)",
+      from: -2350000, to: -2250000,
+      img: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/Taung_child_skull.jpg/640px-Taung_child_skull.jpg",
+      hallazgos: "Cráneo infantil (\"Niño de Taung\"), holotipo de Australopithecus africanus.",
+      excavacion: "Descubrimiento en 1924",
+      investigadores: "Raymond Dart",
+      datos: "Identificación del primer Australopithecus; debate sobre si eran cazadores o presas de grandes carnívoros."
+    },
+    {
+      name: "Kanapoi y Allia Bay",
+      country: "Kenia",
+      lat: 2.327, lng: 36.072,
+      group: "Plioceno",
+      periodo: "Plioceno (3,9–4,2 m.a.)",
+      from: -4200000, to: -3900000,
+      hallazgos: "Mandíbula (KNM-KP 29281), tibia y restos dentales.",
+      excavacion: "1994, 1995",
+      investigadores: "Meave Leakey y equipo",
+      datos: "Definición de Australopithecus anamensis; bipedismo en homínidos de más de 4 m.a."
+    },
+    {
+      name: "Koro Toro",
+      country: "Chad",
+      lat: 16.090, lng: 18.500,
+      group: "Plioceno",
+      periodo: "Plioceno (3,0–3,5 m.a.)",
+      from: -3500000, to: -3000000,
+      hallazgos: "Fragmento de mandíbula (KT12/H1) apodado \"Abel\".",
+      excavacion: "1995",
+      investigadores: "Michel Brunet y equipo",
+      datos: "Definición de Australopithecus bahrelghazali; primer australopitecino al oeste del Rift Valley, cuestionando la teoría 'East Side Story'."
+    },
+    {
+      name: "Bouri",
+      country: "Etiopía",
+      lat: 10.255, lng: 40.547,
+      group: "Plioceno",
+      periodo: "Plio-Pleistoceno (~2,5 m.a.)",
+      from: -2550000, to: -2450000,
+      hallazgos: "Restos craneales (BOU-VP 12/130) y huesos de mamíferos con marcas de corte.",
+      excavacion: "1999",
+      investigadores: "Berhane Asfaw, Tim White y equipo",
+      datos: "Definición de Australopithecus garhi; posible uso de herramientas líticas para procesar carne antes del género Homo."
+    },
+    {
+      name: "Krapina",
+      country: "Croacia",
+      lat: 46.161, lng: 15.880,
+      group: "Pleistoceno Superior",
+      periodo: "Pleistoceno (~130.000 años)",
+      from: -135000, to: -125000,
+      hallazgos: "900 huesos y 200 dientes neandertales; garras de pigargo modificadas.",
+      excavacion: "1899–1905",
+      investigadores: "Dragutin Gorjanović-Kramberger, D. Radovčić",
+      datos: "Pensamiento simbólico (collar de garras) 90.000 años antes de lo previsto; lateralización cerebral (dextrismo) sugiriendo lenguaje."
+    },
+    {
+      name: "Cueva de Blombos",
+      country: "Sudáfrica",
+      lat: -34.418, lng: 21.221,
+      group: "Pleistoceno Superior",
+      periodo: "Middle Stone Age (~75.000 años)",
+      from: -80000, to: -70000,
+      img: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Blombos_Cave_engraved_ochre.jpg/640px-Blombos_Cave_engraved_ochre.jpg",
+      hallazgos: "Cuentas de caracol, ocre grabado y puntas bifaciales en silcreta.",
+      excavacion: "Desde 1991",
+      investigadores: "Christopher Henshilwood",
+      datos: "Orígenes de la mente moderna y comportamiento simbólico; uso de pigmentos estéticos y técnicas de retoque por presión."
+    },
+    {
+      name: "Barranco León y Fuentenueva 3",
+      country: "España",
+      lat: 37.738, lng: -2.717,
+      group: "Pleistoceno Inferior",
+      periodo: "Pleistoceno Inferior (1,2–1,3 m.a.)",
+      from: -1300000, to: -1200000,
+      img: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3d/Yacimiento_Barranco_Le%C3%B3n.jpg/640px-Yacimiento_Barranco_Le%C3%B3n.jpg",
+      hallazgos: "Industria lítica tallada y fauna con marcas de procesado.",
+      excavacion: "Desde los años 80",
+      investigadores: "Josep Gibert y equipo",
+      datos: "Presencia humana más antigua confirmada en Europa occidental; transporte de materias primas a 2–6 km."
+    },
+    {
+      name: "Koobi Fora",
+      country: "Kenia",
+      lat: 3.948, lng: 36.180,
+      group: "Pleistoceno Inferior",
+      periodo: "Plio-Pleistoceno (1,5–1,86 m.a.)",
+      from: -1860000, to: -1500000,
+      hallazgos: "Artefactos líticos y fauna concentrada verticalmente.",
+      excavacion: "—",
+      investigadores: "Glynn Isaac, Fiona Marshall, Jack Harris",
+      datos: "Identificación de bases habitacionales (sitios tipo C); procesamiento de carcasas y posible compartición de comida."
+    },
+    {
+      name: "Hohle Fels",
+      country: "Alemania",
+      lat: 48.379, lng: 9.756,
+      group: "Pleistoceno Superior",
+      periodo: "Paleolítico (33.000–40.000 años)",
+      from: -40000, to: -33000,
+      hallazgos: "Útiles líticos de neandertales y humanos modernos.",
+      excavacion: "Referencia 2009",
+      investigadores: "Bruce Hardy",
+      datos: "Análisis de trazas: ambos grupos usaban herramientas para actividades idénticas (fijar puntas con resina), reduciendo la brecha conductual."
+    },
+    {
+      name: "Puente de las Hijas de Jacob",
+      country: "Israel",
+      lat: 33.001, lng: 35.626,
+      group: "Pleistoceno Medio",
+      periodo: "Paleolítico (~800.000 años)",
+      from: -820000, to: -780000,
+      hallazgos: "Semillas, madera y pedernal quemados.",
+      excavacion: "—",
+      investigadores: "—",
+      datos: "Evidencia temprana del manejo y control del fuego por homínidos."
+    },
+    {
+      name: "Cueva de Chauvet",
+      country: "Francia",
+      lat: 44.388, lng: 4.414,
+      group: "Pleistoceno Superior",
+      periodo: "Paleolítico Superior (~32.410 años)",
+      from: -34000, to: -30000,
+      hallazgos: "Paneles pintados con motivos animales.",
+      excavacion: "Referenciado en 1996",
+      investigadores: "Jean Clottes",
+      datos: "Datación directa por radiocarbono que revoluciona la cronología del arte rupestre, mostrando destrezas pictóricas avanzadas tempranas."
+    },
+    {
+      name: "Dolní Věstonice",
+      country: "Rep. Checa",
+      lat: 48.890, lng: 16.646,
+      group: "Pleistoceno Superior",
+      periodo: "Paleolítico Superior",
+      from: -30000, to: -25000,
+      hallazgos: "Figurillas de barro.",
+      excavacion: "—",
+      investigadores: "—",
+      datos: "Huella dactilar en figurilla perteneciente a una mujer o joven, sugiriendo participación femenina en la creación de objetos simbólicos."
+    }
+  ];
+
+  // Colores de los grupos del mapa (mismos que el PDF)
+  const GROUP_COLORS = {
+    "Plioceno": "#f5c542",
+    "Pleistoceno Inferior": "#7ec9a6",
+    "Pleistoceno Medio": "#e1727a",
+    "Pleistoceno Superior": "#5fb4d9"
+  };
+
+  /* =====================================================
+     3. RENDERIZADO DE LA LÍNEA DE TIEMPO (SVG)
+     ===================================================== */
+
+  const TIMELINE_DOMAIN = [-4500000, 0];
+  const ROW_HEIGHT = 13;
+  const ROW_GAP = 2;
+  const MARGIN = { top: 28, right: 24, bottom: 26, left: 235 };
+
+  function buildTimeline() {
+    const svg = document.getElementById("timeline");
+    const width = Math.max(svg.parentElement.clientWidth || 0, 680);
+    const innerWidth = width - MARGIN.left - MARGIN.right;
+    const totalRows = TIMELINE_ROWS.length + ROW_CATEGORIES.length; // categoría + filas
+    const innerHeight = totalRows * (ROW_HEIGHT + ROW_GAP);
+    const height = MARGIN.top + innerHeight + MARGIN.bottom;
+    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    svg.setAttribute("width", width);
+    svg.setAttribute("height", height);
+
+    const xScale = (year) => {
+      const t = (year - TIMELINE_DOMAIN[0]) / (TIMELINE_DOMAIN[1] - TIMELINE_DOMAIN[0]);
+      return MARGIN.left + t * innerWidth;
+    };
+
+    // Limpiar
+    svg.innerHTML = "";
+
+    const ns = "http://www.w3.org/2000/svg";
+    const ce = (name, attrs = {}, parent = svg, text = null) => {
+      const el = document.createElementNS(ns, name);
+      Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
+      if (text != null) el.textContent = text;
+      parent.appendChild(el);
+      return el;
+    };
+
+    // Fondo y rejilla vertical (eje X) — millones de años
+    const ticks = [-4500000, -4000000, -3500000, -3000000, -2500000,
+                   -2000000, -1500000, -1000000, -500000, 0];
+    ticks.forEach((tick) => {
+      const x = xScale(tick);
+      ce("line", {
+        x1: x, x2: x,
+        y1: MARGIN.top - 8,
+        y2: MARGIN.top + innerHeight,
+        class: "grid-line"
+      });
+      const label = tick === 0 ? "Hoy" : `${(tick / 1e6).toFixed(1).replace(".0","")} Ma`;
+      ce("text", {
+        x: x, y: MARGIN.top + innerHeight + 22,
+        "text-anchor": "middle",
+        class: "axis-label"
+      }, svg, label);
+    });
+
+    // Etiqueta del eje
+    ce("text", {
+      x: MARGIN.left + innerWidth / 2,
+      y: height - 2,
+      "text-anchor": "middle",
+      class: "axis-label",
+      style: "font-weight:700;fill:#5a4a3a;"
+    }, svg, "Años antes del presente");
+
+    // Renderizar filas, agrupadas por categoría
+    let yCursor = MARGIN.top;
+    ROW_CATEGORIES.forEach((cat, ci) => {
+      // Encabezado de categoría
+      ce("rect", {
+        x: 0, y: yCursor - 2,
+        width: width,
+        height: ROW_HEIGHT,
+        fill: cat.color,
+        opacity: 0.12
+      });
+      ce("text", {
+        x: 12, y: yCursor + ROW_HEIGHT / 2,
+        class: "row-label cat"
+      }, svg, "▸ " + cat.label);
+      yCursor += ROW_HEIGHT + ROW_GAP;
+
+      // Filas de la categoría
+      const rowsOfCat = TIMELINE_ROWS.filter(r => r.category === cat.id);
+      rowsOfCat.forEach((row, ri) => {
+        // Fondo alterno
+        ce("rect", {
+          x: 0, y: yCursor - 2,
+          width: width,
+          height: ROW_HEIGHT,
+          class: "row-bg" + (ri % 2 === 0 ? "" : " alt")
+        });
+        // Etiqueta de la fila
+        ce("text", {
+          x: MARGIN.left - 8,
+          y: yCursor + ROW_HEIGHT / 2,
+          "text-anchor": "end",
+          class: "row-label"
+        }, svg, row.name);
+
+        // Barra
+        const x1 = xScale(row.from);
+        const x2 = xScale(row.to);
+        const barW = Math.max(2, x2 - x1);
+        const bar = ce("rect", {
+          x: x1, y: yCursor + 2,
+          width: barW,
+          height: Math.max(5, ROW_HEIGHT - 4),
+          rx: 2, ry: 2,
+          fill: row.color,
+          class: "bar"
+        });
+        bar.__data = row;
+        bar.addEventListener("mouseenter", (e) => {
+          bar.classList.add("is-hovered");
+          showTip(e, rowTipHTML(row));
+          highlightPeriod(row.from, row.to,
+            `${row.name} · ${formatYear(row.from)} – ${formatYear(row.to)}`);
+        });
+        bar.addEventListener("mousemove", moveTip);
+        bar.addEventListener("mouseleave", () => {
+          bar.classList.remove("is-hovered");
+          hideTip();
+          clearHighlight();
+        });
+
+        yCursor += ROW_HEIGHT + ROW_GAP;
+      });
+    });
+
+    // Banda vertical de resaltado (oculta por defecto)
+    const band = ce("rect", {
+      x: 0, y: MARGIN.top - 6,
+      width: 0,
+      height: innerHeight + 12,
+      class: "highlight-band",
+      id: "highlight-band"
+    });
+    const bandLabel = ce("text", {
+      x: 0, y: MARGIN.top - 12,
+      "text-anchor": "middle",
+      class: "highlight-label",
+      id: "highlight-label"
+    }, svg, "");
+
+    // Guardamos la escala para usarla al resaltar
+    svg.__xScale = xScale;
+    svg.__bounds = { top: MARGIN.top - 6, height: innerHeight + 12 };
+  }
+
+  /* =====================================================
+     4. INTERACCIONES — TOOLTIPS Y BANDA DE RESALTADO
+     ===================================================== */
+
+  const tip = document.getElementById("tip");
+  function showTip(evt, html) {
+    tip.innerHTML = html;
+    tip.classList.add("show");
+    moveTip(evt);
+  }
+  function moveTip(evt) {
+    const pad = 12;
+    const x = Math.max(16, Math.min(window.innerWidth - 16, evt.clientX));
+    const y = Math.max(16, Math.min(window.innerHeight - 16, evt.clientY - pad));
+    tip.style.left = x + "px";
+    tip.style.top = y + "px";
+  }
+  function hideTip() {
+    tip.classList.remove("show");
+  }
+
+  function rowTipHTML(row) {
+    const fromTxt = formatYear(row.from);
+    const toTxt = formatYear(row.to);
+    return `
+      <strong>${escapeHTML(row.name)}</strong>
+      <div><b>Cronología:</b> ${fromTxt} → ${toTxt}</div>
+      <div style="margin-top:4px;">${escapeHTML(row.details)}</div>
+      <div class="meta"><b>Cultura asociada:</b> ${escapeHTML(row.cultura || "—")}</div>
+    `;
+  }
+
+  function siteTipHTML(site) {
+    return `
+      <strong>${escapeHTML(site.name)} · ${escapeHTML(site.country)}</strong>
+      <div><b>Periodo:</b> ${escapeHTML(site.periodo)}</div>
+      <div style="margin-top:4px;"><b>Hallazgos:</b> ${escapeHTML(site.hallazgos)}</div>
+      <div class="meta"><b>Investigadores:</b> ${escapeHTML(site.investigadores)}</div>
+    `;
+  }
+
+  function formatYear(y) {
+    if (y === 0) return "Presente";
+    const abs = Math.abs(y);
+    if (abs >= 1_000_000) return `${(abs / 1e6).toFixed(2).replace(/\.?0+$/,"")} Ma`;
+    if (abs >= 1_000) return `${Math.round(abs / 1000).toLocaleString("es")} ka`;
+    return `${abs.toLocaleString("es")} a.`;
+  }
+
+  function escapeHTML(s) {
+    return String(s ?? "")
+      .replace(/&/g,"&amp;").replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+
+  function highlightPeriod(from, to, label) {
+    const svg = document.getElementById("timeline");
+    if (!svg.__xScale) return;
+    const xScale = svg.__xScale;
+    const band = document.getElementById("highlight-band");
+    const txt = document.getElementById("highlight-label");
+    const x1 = xScale(Math.max(from, TIMELINE_DOMAIN[0]));
+    const x2 = xScale(Math.min(to, TIMELINE_DOMAIN[1]));
+    const w = Math.max(3, x2 - x1);
+    band.setAttribute("x", x1);
+    band.setAttribute("width", w);
+    band.setAttribute("y", svg.__bounds.top);
+    band.setAttribute("height", svg.__bounds.height);
+    band.classList.add("active");
+    txt.setAttribute("x", x1 + w / 2);
+    txt.setAttribute("y", svg.__bounds.top - 6);
+    txt.textContent = label;
+    txt.classList.add("active");
+  }
+  function clearHighlight() {
+    const band = document.getElementById("highlight-band");
+    const txt = document.getElementById("highlight-label");
+    if (band) band.classList.remove("active");
+    if (txt) txt.classList.remove("active");
+  }
+
+  /* =====================================================
+     5. MAPA — Leaflet
+     ===================================================== */
+
+  function buildMap() {
+    const map = L.map("map", {
+      center: [20, 15],
+      zoom: 2,
+      minZoom: 2,
+      worldCopyJump: true,
+      scrollWheelZoom: true
+    });
+    window.__archMap = map;
+    requestAnimationFrame(() => map.invalidateSize());
+
+    // Capa estilo "Positron" (gris claro, similar al PDF)
+    L.tileLayer(
+      "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png",
+      {
+        attribution: "© OpenStreetMap, © CARTO",
+        subdomains: "abcd",
+        maxZoom: 18
+      }
+    ).addTo(map);
+
+    SITES.forEach((site) => {
+      const color = GROUP_COLORS[site.group] || "#888";
+      const icon = L.divIcon({
+        className: "",
+        html: `<div class="site-marker" style="
+          width:18px;height:18px;background:${color};
+          display:flex;align-items:center;justify-content:center;
+          color:#fff;font-size:10px;font-weight:700;"></div>`,
+        iconSize: [18, 18],
+        iconAnchor: [9, 9]
+      });
+      const marker = L.marker([site.lat, site.lng], { icon }).addTo(map);
+
+      // Popup detallado
+      marker.bindPopup(`
+        <div>
+          <span class="pill" style="background:${color};">${escapeHTML(site.group)}</span>
+          <h4>${escapeHTML(site.name)} · ${escapeHTML(site.country)}</h4>
+          <div><b>Periodo:</b> ${escapeHTML(site.periodo)}</div>
+          <div style="margin-top:4px;"><b>Hallazgos:</b> ${escapeHTML(site.hallazgos)}</div>
+          <div style="margin-top:4px;"><b>Excavación:</b> ${escapeHTML(site.excavacion)}</div>
+          <div style="margin-top:4px;"><b>Investigadores:</b> ${escapeHTML(site.investigadores)}</div>
+          <div style="margin-top:6px;font-size:0.78rem;color:#555;">${escapeHTML(site.datos)}</div>
+        </div>
+      `, { maxWidth: 320 });
+
+      // Hover: tooltip + banda en línea de tiempo
+      marker.on("mouseover", (e) => {
+        const ev = e.originalEvent;
+        showTip(ev, siteTipHTML(site));
+        highlightPeriod(site.from, site.to,
+          `${site.name} · ${formatYear(site.from)} – ${formatYear(site.to)}`);
+        // No hacemos scroll automático: evita saltos de página al pasar el cursor.
+      });
+      marker.on("mousemove", (e) => moveTip(e.originalEvent));
+      marker.on("mouseout", () => {
+        hideTip();
+        clearHighlight();
+      });
+    });
+  }
+
+  /* =====================================================
+     6. LEYENDAS
+     ===================================================== */
+
+  function buildLegends() {
+    const tl = document.getElementById("timeline-legend");
+    ROW_CATEGORIES.forEach(cat => {
+      tl.insertAdjacentHTML("beforeend", `
+        <span class="item">
+          <span class="swatch" style="background:${cat.color}"></span>${cat.label}
+        </span>`);
+    });
+
+    const ml = document.getElementById("map-legend");
+    Object.entries(GROUP_COLORS).forEach(([k, v]) => {
+      ml.insertAdjacentHTML("beforeend", `
+        <span class="item">
+          <span class="swatch" style="background:${v}"></span>${k}
+        </span>`);
+    });
+  }
+
+  /* =====================================================
+     7. INICIALIZACIÓN
+     ===================================================== */
+
+  buildLegends();
+  buildTimeline();
+  buildMap();
+  window.addEventListener("resize", () => {
+    // Reconstruir la línea de tiempo para adaptarse al ancho
+    buildTimeline();
+    if (window.__archMap) requestAnimationFrame(() => window.__archMap.invalidateSize());
+  });
+  </script>
+</body>
+</html>
