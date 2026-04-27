@@ -199,8 +199,8 @@
     #map {
       flex: 1 1 auto;
       width: 100%;
-      height: auto;
-      min-height: 0;
+      height: 100%;
+      min-height: 420px;
       border-radius: 10px;
       border: 1px solid var(--border);
       background: #eaeaea;
@@ -316,6 +316,76 @@
       transform: none;
       max-width: 300px;
     }
+    .map-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+      gap: 12px;
+      flex: 1 1 auto;
+      min-height: 420px;
+      align-items: stretch;
+    }
+    .site-panel {
+      min-height: 420px;
+      max-height: 100%;
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fcfbf8;
+      padding: 14px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.7);
+    }
+    .site-panel h3 {
+      margin: 0 0 8px;
+      color: var(--accent);
+      font-size: 1rem;
+    }
+    .site-panel .panel-image {
+      width: 100%;
+      max-height: 240px;
+      object-fit: cover;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      background: #ece8df;
+      display: block;
+    }
+    .site-panel .panel-meta {
+      display: grid;
+      gap: 6px;
+      font-size: 0.84rem;
+    }
+    .site-panel .panel-note {
+      margin-top: 8px;
+      font-size: 0.8rem;
+      color: #555;
+    }
+    .site-panel-empty {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .route-arrow {
+      background: transparent;
+      border: none;
+    }
+    .route-arrow-shape {
+      font-size: 16px;
+      line-height: 1;
+      text-shadow: 0 1px 3px rgba(255,255,255,0.95), 0 0 6px rgba(255,255,255,0.95);
+      transform-origin: center center;
+      font-weight: 700;
+    }
+    .route-label-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #f7f3eb;
+      border: 1px solid #e7dcc5;
+      font-size: 0.74rem;
+      color: #6b5635;
+      margin-top: 6px;
+      margin-right: 6px;
+    }
 
     footer {
       flex: 0 0 auto;
@@ -326,6 +396,12 @@
     }
     footer a { color: var(--accent); }
 
+    @media (max-width: 1100px) {
+      .dashboard { grid-template-columns: 1fr; height: auto; }
+      .map-layout { grid-template-columns: 1fr; }
+      #map { min-height: 460px; height: 52vh; }
+      .site-panel { min-height: 260px; max-height: none; }
+    }
     @media (max-width: 900px) {
       html, body { height: auto; }
       body { display: block; min-height: 100vh; overflow-x: hidden; }
@@ -335,7 +411,9 @@
       .dashboard { display: block; height: auto; }
       section.card { margin-bottom: 16px; }
       #timeline-wrap { max-height: none; min-height: 0; overflow: hidden; }
-      #map { height: 420px; min-height: 420px; }
+      #map { height: 48vh; min-height: 340px; }
+      .site-panel { padding: 12px; border-radius: 12px; }
+      .leaflet-control-layers { max-width: calc(100vw - 36px); }
     }
   </style>
 </head>
@@ -363,14 +441,24 @@
       <h2>Mapa de yacimientos arqueológicos</h2>
       <p class="subtitle">
         Pase el cursor sobre un marcador para resaltar su periodo en la línea de tiempo.
-        Haga clic para ver una ficha detallada del yacimiento. Las áreas de color son halos orientativos, no fronteras exactas.
+        La ficha completa del yacimiento aparece en el panel lateral o inferior, siempre visible también en móvil.
       </p>
-      <div class="area-controls" aria-label="Controles de áreas aproximadas">
+      <div class="area-controls" aria-label="Controles de capas del mapa">
         <label><input type="checkbox" id="toggle-species-areas" checked /> Áreas aprox. de especies</label>
         <label><input type="checkbox" id="toggle-culture-areas" checked /> Áreas aprox. de culturas</label>
+        <label><input type="checkbox" id="toggle-dispersal-routes" checked /> Flechas de dispersión</label>
       </div>
       <div class="legend" id="map-legend"></div>
-      <div id="map"></div>
+      <div class="map-layout">
+        <div id="map"></div>
+        <aside id="site-panel" class="site-panel" aria-live="polite">
+          <div class="site-panel-empty">
+            <h3>Ficha del yacimiento</h3>
+            <p>Toque o pase el cursor sobre un marcador del mapa para ver la foto, la datación, los años de excavación y los hallazgos principales.</p>
+            <p>Al pasar el cursor sobre una barra del timeline, se resaltarán en el mapa los yacimientos correspondientes a esa especie, periodo o cultura.</p>
+          </div>
+        </aside>
+      </div>
       </section>
     </div>
   </main>
@@ -1858,6 +1946,10 @@
           hideTip();
           clearHighlight();
           clearSiteHighlights();
+          if (window.__selectedMarker) {
+            setMarkerState(window.__selectedMarker, "match");
+            window.__selectedMarker.setZIndexOffset(1200);
+          }
         };
         [rowBg, rowLabel, bar].forEach(el => {
           el.addEventListener("mouseenter", onEnterRow);
@@ -2069,6 +2161,53 @@
     });
   }
 
+  function renderSitePanel(site, color) {
+    const panel = document.getElementById("site-panel");
+    if (!panel) return;
+    if (!site) {
+      panel.innerHTML = `<div class="site-panel-empty"><h3>Ficha del yacimiento</h3><p>Seleccione un yacimiento para ver su información completa.</p></div>`;
+      return;
+    }
+    const media = site.img ? `
+      <img class="panel-image" src="${escapeAttr(site.img)}" alt="${escapeAttr(site.name)}" loading="lazy" onerror="this.style.display='none'" />
+      ${site.imgCredit ? `<div class="photo-credit">${site.imgSource ? `<a href="${escapeAttr(site.imgSource)}" target="_blank" rel="noopener noreferrer">Foto / fuente visual: ${escapeHTML(site.imgCredit)}</a>` : `Foto / fuente visual: ${escapeHTML(site.imgCredit)}`}</div>` : ""}
+    ` : "";
+    const chips = site.routeTags && site.routeTags.length ? site.routeTags.map(tag => `<span class="route-label-chip">↗ ${escapeHTML(tag)}</span>`).join("") : "";
+    const photoLinks = Array.isArray(site.externalPhotos) && site.externalPhotos.length ? `
+      <div class="photo-links">
+        ${site.externalPhotos.map(p => `<a href="${escapeAttr(p.url)}" target="_blank" rel="noopener noreferrer">${escapeHTML(p.label)}</a>`).join("")}
+      </div>` : "";
+    panel.innerHTML = `
+      ${media}
+      <span class="pill" style="background:${color};">${escapeHTML(site.group)}</span>
+      <h3>${escapeHTML(site.name)} · ${escapeHTML(site.country)}</h3>
+      <div class="panel-meta">
+        <div><b>Periodo:</b> ${escapeHTML(site.periodo)}</div>
+        <div><b>Especie:</b> ${escapeHTML(site.species || "—")}</div>
+        <div><b>Cultura:</b> ${escapeHTML(site.culture || "—")}</div>
+        <div><b>Hallazgos:</b> ${escapeHTML(site.hallazgos)}</div>
+        <div><b>Años de excavación / hallazgo:</b> ${escapeHTML(site.excavacion || "—")}</div>
+        <div><b>Investigadores:</b> ${escapeHTML(site.investigadores || "—")}</div>
+      </div>
+      ${chips ? `<div>${chips}</div>` : ""}
+      ${photoLinks}
+      <div class="panel-note">${escapeHTML(site.datos || "")}</div>
+      ${site.source ? `<div class="popup-source"><a href="${escapeAttr(site.source)}" target="_blank" rel="noopener noreferrer">Fuente / ficha oficial</a></div>` : ""}
+    `;
+  }
+
+  function routeMatchesSite(route, site) {
+    const species = normalizeText(site.species || "");
+    const routeName = normalizeText(route.name);
+    if (routeName.includes("australopithecus") && species.includes("australopithecus")) return true;
+    if (routeName.includes("ergaster") && (species.includes("ergaster") || species.includes("erectus") || species.includes("georgicus"))) return true;
+    if (routeName.includes("heidelbergensis") && (species.includes("heidelbergensis") || species.includes("rhodesiensis") || species.includes("antecessor"))) return true;
+    if (routeName.includes("neanderthal") && species.includes("neanderthal")) return true;
+    if (routeName.includes("denisov") && (species.includes("denisova") || species.includes("denisov"))) return true;
+    if (routeName.includes("insulares") && (species.includes("floresiensis") || species.includes("luzonensis"))) return true;
+    return false;
+  }
+
   function highlightPeriod(from, to, label) {
     const svg = document.getElementById("timeline");
     if (!svg.__xScale) return;
@@ -2121,6 +2260,7 @@
 
     const speciesLayer = L.layerGroup().addTo(map);
     const cultureLayer = L.layerGroup().addTo(map);
+    const dispersalLayer = L.layerGroup().addTo(map);
 
     function addApproxArea(area, targetLayer, opacityBase = 0.13) {
       const style = {
@@ -2149,8 +2289,52 @@
       }
     }
 
+    function getSegmentBearing(a, b) {
+      const lat1 = a[0] * Math.PI / 180;
+      const lat2 = b[0] * Math.PI / 180;
+      const dLon = (b[1] - a[1]) * Math.PI / 180;
+      const y = Math.sin(dLon) * Math.cos(lat2);
+      const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+      return Math.atan2(y, x) * 180 / Math.PI;
+    }
+
+    function addRoute(route) {
+      route.paths.forEach(path => {
+        const line = L.polyline(path, {
+          color: route.color,
+          weight: 3,
+          opacity: 0.85,
+          dashArray: "10 7",
+          lineCap: "round"
+        });
+        line.bindTooltip(
+          `<div class="area-tooltip"><b>${escapeHTML(route.name)}</b><br>${escapeHTML(route.period)}<br><span>${escapeHTML(route.note)}</span></div>`,
+          { sticky: true, direction: "top", opacity: 0.95 }
+        );
+        dispersalLayer.addLayer(line);
+
+        for (let i = 1; i < path.length; i++) {
+          const prev = path[i - 1];
+          const curr = path[i];
+          const mid = [(prev[0] + curr[0]) / 2, (prev[1] + curr[1]) / 2];
+          const angle = getSegmentBearing(prev, curr);
+          const arrow = L.marker(mid, {
+            icon: L.divIcon({
+              className: "route-arrow",
+              html: `<div class="route-arrow-shape" style="color:${route.color}; transform: rotate(${angle}deg);">➜</div>`,
+              iconSize: [18, 18],
+              iconAnchor: [9, 9]
+            }),
+            interactive: false
+          });
+          dispersalLayer.addLayer(arrow);
+        }
+      });
+    }
+
     CULTURE_AREAS.forEach(area => addApproxArea(area, cultureLayer, 0.10));
     SPECIES_AREAS.forEach(area => addApproxArea(area, speciesLayer, 0.12));
+    DISPERSAL_ROUTES.forEach(route => addRoute(route));
 
     document.getElementById("toggle-species-areas").addEventListener("change", (e) => {
       if (e.target.checked) speciesLayer.addTo(map); else map.removeLayer(speciesLayer);
@@ -2158,10 +2342,27 @@
     document.getElementById("toggle-culture-areas").addEventListener("change", (e) => {
       if (e.target.checked) cultureLayer.addTo(map); else map.removeLayer(cultureLayer);
     });
+    document.getElementById("toggle-dispersal-routes").addEventListener("change", (e) => {
+      if (e.target.checked) dispersalLayer.addTo(map); else map.removeLayer(dispersalLayer);
+    });
 
     const markers = [];
+    let selectedMarker = null;
+
+    function selectMarker(marker, shouldPan = false) {
+      selectedMarker = marker;
+      window.__selectedMarker = marker;
+      const site = marker.__site;
+      const color = GROUP_COLORS[site.group] || "#888";
+      renderSitePanel(site, color);
+      clearSiteHighlights();
+      setMarkerState(marker, "match");
+      marker.setZIndexOffset(1200);
+      if (shouldPan) map.panInside(marker.getLatLng(), { paddingTopLeft: [32, 32], paddingBottomRight: [32, 32] });
+    }
 
     SITES.forEach((site) => {
+      site.routeTags = DISPERSAL_ROUTES.filter(route => routeMatchesSite(route, site)).map(route => route.species);
       const color = GROUP_COLORS[site.group] || "#888";
       const icon = L.divIcon({
         className: "",
@@ -2175,48 +2376,26 @@
       const marker = L.marker([site.lat, site.lng], { icon }).addTo(map);
       marker.__site = site;
       markers.push(marker);
-
-      marker.bindPopup(sitePopupHTML(site, color), {
-        maxWidth: 380,
-        minWidth: 280,
-        autoPan: true,
-        keepInView: true,
-        autoPanPaddingTopLeft: [28, 28],
-        autoPanPaddingBottomRight: [28, 28]
-      });
-
-      marker.on("popupopen", (ev) => {
-        const popup = ev.popup;
-        const adjust = () => {
-          popup.update();
-          map.panInside(marker.getLatLng(), { paddingTopLeft: [42, 42], paddingBottomRight: [42, 42] });
-        };
-        setTimeout(adjust, 0);
-        setTimeout(adjust, 220);
-        const popupEl = popup.getElement();
-        if (popupEl) {
-          popupEl.querySelectorAll("img").forEach((img) => {
-            if (img.complete) return;
-            img.addEventListener("load", adjust, { once: true });
-            img.addEventListener("error", adjust, { once: true });
-          });
-        }
-      });
+      marker.bindTooltip(`${escapeHTML(site.name)} · ${escapeHTML(site.country)}`, { sticky: true, direction: "top", opacity: 0.95 });
 
       marker.on("mouseover", () => {
         highlightPeriod(site.from, site.to,
           `${site.name} · ${formatYear(site.from)} – ${formatYear(site.to)}`);
         showTimelineTip(siteTipHTML(site), site.from, site.to);
-        setMarkerState(marker, "match");
+        selectMarker(marker, false);
       });
       marker.on("mouseout", () => {
         hideTip();
         clearHighlight();
-        if (!(window.__timelineHoverActive)) clearSiteHighlights();
+        if (selectedMarker && selectedMarker !== marker) selectMarker(selectedMarker, false);
+      });
+      marker.on("click", () => {
+        selectMarker(marker, true);
       });
     });
 
     window.__siteMarkers = markers;
+    if (markers.length) selectMarker(markers[0], false);
   }
 
   function sitePopupHTML(site, color) {
@@ -2271,6 +2450,7 @@
     ml.insertAdjacentHTML("beforeend", `
       <span class="item"><span class="swatch" style="background:#8dd3c7"></span>Halos: especies</span>
       <span class="item"><span class="swatch" style="background:#386cb0"></span>Halos: culturas</span>
+      <span class="item"><span class="swatch" style="background:#d35b1f"></span>Flechas: dispersión</span>
     `);
   }
 
