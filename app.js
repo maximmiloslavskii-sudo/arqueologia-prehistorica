@@ -1,394 +1,3 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Arqueología Prehistórica · Línea de Tiempo y Mapa Interactivo</title>
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-    crossorigin=""
-  />
-  <style>
-    :root {
-      --bg: #f7f7f5;
-      --card: #ffffff;
-      --ink: #222;
-      --muted: #6c6c6c;
-      --border: #e2e2e2;
-      --accent: #5a4a3a;
-
-      /* Period palette (matches the PDF) */
-      --c-plioceno: #f5c542;
-      --c-pleistoceno: #d8c66a;
-      --c-pleistoceno-inferior: #7ec9a6;
-      --c-pleistoceno-medio: #e1727a;
-      --c-pleistoceno-superior: #5fb4d9;
-      --c-paleolitico: #e89249;
-      --c-hominino: #8367c7;
-      --c-cultura: #6f6f6f;
-      --c-transicion: #c95a5e;
-    }
-
-    * { box-sizing: border-box; }
-    html, body {
-      margin: 0;
-      height: 100%;
-      font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      background: var(--bg);
-      color: var(--ink);
-      line-height: 1.45;
-    }
-    body {
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      overflow-x: hidden;
-    }
-    header {
-      flex: 0 0 auto;
-      background: linear-gradient(135deg, #2e2a25, #5a4a3a);
-      color: #fff;
-      padding: 18px 24px;
-      text-align: center;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.08);
-    }
-    header h1 {
-      margin: 0 0 6px;
-      font-size: 1.7rem;
-      letter-spacing: 0.2px;
-    }
-    header p {
-      margin: 0;
-      opacity: 0.85;
-      font-size: 0.95rem;
-    }
-    main {
-      flex: 1 1 auto;
-      width: 100%;
-      max-width: 1600px;
-      min-height: 0;
-      margin: 0 auto;
-      padding: 14px 18px;
-    }
-    .dashboard {
-      display: grid;
-      grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr);
-      gap: 16px;
-      height: 100%;
-      min-height: 0;
-      align-items: stretch;
-    }
-    section.card {
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 12px 14px;
-      margin-bottom: 0;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-    }
-    section.card h2 {
-      margin: 0 0 3px;
-      font-size: 1.15rem;
-      color: var(--accent);
-    }
-    section.card .subtitle {
-      margin: 0 0 8px;
-      color: var(--muted);
-      font-size: 0.84rem;
-    }
-    .legend {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 5px 10px;
-      margin: 0 0 8px;
-      font-size: 0.78rem;
-      color: var(--muted);
-    }
-    .legend .item {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .legend .swatch {
-      width: 11px; height: 11px; border-radius: 4px;
-      border: 1px solid rgba(0,0,0,0.08);
-    }
-
-    /* === TIMELINE === */
-    #timeline-wrap {
-      position: relative;
-      flex: 1 1 auto;
-      min-height: 0;
-      overflow: hidden;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      background: #fff;
-    }
-    svg.timeline {
-      display: block;
-      min-width: 0;
-      width: 100%;
-    }
-    .row-bg { fill: #fafafa; }
-    .row-bg.alt { fill: #f1efe9; }
-    .grid-line { stroke: #ddd; stroke-width: 1; shape-rendering: crispEdges; }
-    .axis-label { font-size: 10px; fill: #555; }
-    .row-label {
-      font-size: 10.5px;
-      fill: #2b2b2b;
-      dominant-baseline: middle;
-    }
-    .row-label.cat { font-weight: 700; fill: #5a4a3a; }
-    .bar {
-      cursor: pointer;
-      transition: filter 0.15s ease, transform 0.15s ease;
-      stroke: rgba(0,0,0,0.15);
-      stroke-width: 0.5;
-    }
-    .bar:hover,
-    .bar.is-hovered {
-      filter: brightness(1.08) drop-shadow(0 2px 4px rgba(0,0,0,0.25));
-    }
-    .highlight-band {
-      fill: rgba(241, 130, 80, 0.18);
-      stroke: #d35b1f;
-      stroke-width: 1.5;
-      stroke-dasharray: 4 3;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.15s ease;
-    }
-    .highlight-band.active { opacity: 1; }
-    .highlight-label {
-      fill: #d35b1f;
-      font-size: 11px;
-      font-weight: 700;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.15s ease;
-    }
-    .highlight-label.active { opacity: 1; }
-
-    /* === TOOLTIP === */
-    .tip {
-      position: fixed;
-      pointer-events: none;
-      background: rgba(34, 34, 34, 0.96);
-      color: #fff;
-      padding: 10px 12px;
-      border-radius: 8px;
-      max-width: 320px;
-      font-size: 0.82rem;
-      line-height: 1.35;
-      box-shadow: 0 6px 18px rgba(0,0,0,0.25);
-      opacity: 0;
-      transform: translate(-50%, -100%);
-      transition: opacity 0.12s ease;
-      z-index: 9999;
-    }
-    .tip.show { opacity: 1; }
-    .tip strong { display: block; margin-bottom: 4px; color: #ffd28a; }
-    .tip .meta { color: #b8b8b8; font-size: 0.75rem; margin-top: 4px; }
-
-    /* === MAP === */
-    #map {
-      flex: 1 1 auto;
-      width: 100%;
-      height: auto;
-      min-height: 0;
-      border-radius: 10px;
-      border: 1px solid var(--border);
-      background: #eaeaea;
-    }
-    .leaflet-popup-content {
-      font-size: 0.82rem;
-      line-height: 1.35;
-      min-width: 280px;
-      max-width: 360px !important;
-    }
-    .leaflet-popup-content img {
-      width: 100%;
-      max-height: 180px;
-      object-fit: cover;
-      border-radius: 6px;
-      margin-bottom: 10px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.15);
-      display: block;
-    }
-    .leaflet-popup-content h4 {
-      margin: 0 0 6px;
-      color: #5a4a3a;
-      font-size: 0.95rem;
-    }
-    .leaflet-popup-content .pill {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-size: 0.7rem;
-      color: #fff;
-      margin-bottom: 6px;
-    }
-    .site-marker {
-      border-radius: 50%;
-      border: 2px solid #fff;
-      box-shadow: 0 0 0 1px rgba(0,0,0,0.25), 0 2px 6px rgba(0,0,0,0.3);
-      cursor: pointer;
-      transition: transform 0.15s ease;
-    }
-    .site-marker:hover { transform: scale(1.25); }
-    .site-marker.is-dim { opacity: 0.16; transform: scale(0.82); }
-    .site-marker.is-match { opacity: 1; transform: scale(1.42); box-shadow: 0 0 0 3px rgba(255,255,255,0.92), 0 0 0 6px rgba(211,91,31,0.24), 0 4px 14px rgba(0,0,0,0.35); }
-    .site-marker.is-match::after {
-      content: "";
-      position: absolute;
-      inset: -8px;
-      border-radius: 50%;
-      border: 2px solid rgba(211,91,31,0.55);
-      animation: pulse-site 1.7s ease-out infinite;
-    }
-    @keyframes pulse-site {
-      0% { transform: scale(0.85); opacity: 0.95; }
-      100% { transform: scale(1.45); opacity: 0; }
-    }
-    .leaflet-popup-content-wrapper { overflow: visible; }
-    .leaflet-popup-tip-container { overflow: visible; }
-    .area-controls {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px 10px;
-      margin: -2px 0 8px;
-      color: var(--muted);
-      font-size: 0.76rem;
-    }
-    .area-controls label {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      padding: 3px 8px;
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      background: #fafafa;
-      cursor: pointer;
-      user-select: none;
-    }
-    .area-tooltip {
-      font-size: 0.78rem;
-      line-height: 1.25;
-      color: #222;
-    }
-    .popup-source {
-      margin-top: 8px;
-      font-size: 0.72rem;
-      color: #777;
-    }
-    .popup-source a { color: #5a4a3a; font-weight: 700; text-decoration: none; }
-    .photo-credit {
-      margin: -4px 0 8px;
-      color: #777;
-      font-size: 0.68rem;
-    }
-    .photo-credit a { color: #777; text-decoration: none; }
-    .photo-credit a:hover { color: #4b3d2e; text-decoration: underline; }
-    .photo-links {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin: 6px 0 8px;
-    }
-    .photo-links a {
-      display: inline-block;
-      padding: 4px 7px;
-      border: 1px solid #d7c8ad;
-      border-radius: 999px;
-      color: #6f4e1f;
-      background: #fff9ee;
-      font-size: 0.74rem;
-      text-decoration: none;
-      font-weight: 700;
-    }
-    .photo-links a:hover { background: #f1e2c7; }
-    .tip.timeline-anchored {
-      transform: none;
-      max-width: 300px;
-    }
-
-    footer {
-      flex: 0 0 auto;
-      text-align: center;
-      padding: 8px 12px 12px;
-      color: var(--muted);
-      font-size: 0.78rem;
-    }
-    footer a { color: var(--accent); }
-
-    @media (max-width: 900px) {
-      html, body { height: auto; }
-      body { display: block; min-height: 100vh; overflow-x: hidden; }
-      header { padding: 18px 16px; }
-      header h1 { font-size: 1.3rem; }
-      main { padding: 16px; }
-      .dashboard { display: block; height: auto; }
-      section.card { margin-bottom: 16px; }
-      #timeline-wrap { max-height: none; min-height: 0; overflow: hidden; }
-      #map { height: 420px; min-height: 420px; }
-    }
-  </style>
-</head>
-<body>
-  <header>
-    <h1>Arqueología Prehistórica</h1>
-    <p>Línea de tiempo y mapa interactivo · Eras geológicas · Homínidos · Culturas líticas · Yacimientos</p>
-  </header>
-
-  <main>
-    <div class="dashboard">
-      <section class="card timeline-card">
-      <h2>Línea de tiempo</h2>
-      <p class="subtitle">
-        Pase el cursor sobre las barras para ver detalles y resaltar en el mapa los yacimientos asociados. Al situar el cursor sobre un yacimiento del mapa,
-        aparecerá una <strong>banda vertical naranja</strong> sobre la franja temporal correspondiente.
-      </p>
-      <div class="legend" id="timeline-legend"></div>
-      <div id="timeline-wrap">
-        <svg class="timeline" id="timeline" xmlns="http://www.w3.org/2000/svg"></svg>
-      </div>
-      </section>
-
-      <section class="card map-card">
-      <h2>Mapa de yacimientos arqueológicos</h2>
-      <p class="subtitle">
-        Pase el cursor sobre un marcador para resaltar su periodo en la línea de tiempo.
-        Haga clic para ver una ficha detallada del yacimiento. Las áreas de color son halos orientativos, no fronteras exactas.
-      </p>
-      <div class="area-controls" aria-label="Controles de áreas aproximadas">
-        <label><input type="checkbox" id="toggle-species-areas" checked /> Áreas aprox. de especies</label>
-        <label><input type="checkbox" id="toggle-culture-areas" checked /> Áreas aprox. de culturas</label>
-      </div>
-      <div class="legend" id="map-legend"></div>
-      <div id="map"></div>
-      </section>
-    </div>
-  </main>
-
-  <footer>
-    Datos elaborados a partir de tablas de cronología, yacimientos y fuentes institucionales. Los halos de especies/culturas son aproximaciones didácticas, no fronteras paleodemográficas exactas. ·
-    Mapa © <a href="https://carto.com/attributions" target="_blank">CARTO</a> ·
-    © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>
-  </footer>
-
-  <div class="tip" id="tip"></div>
-
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-    crossorigin=""
-  ></script>
-  <script>
 /* =====================================================
      1. DATOS — Cronología (eras, homínidos y culturas)
      ===================================================== */
@@ -1816,14 +1425,14 @@
       const rowsOfCat = TIMELINE_ROWS.filter(r => r.category === cat.id);
       rowsOfCat.forEach((row, ri) => {
         // Fondo alterno
-        const rowBg = ce("rect", {
+        ce("rect", {
           x: 0, y: yCursor - 2,
           width: width,
           height: ROW_HEIGHT,
           class: "row-bg" + (ri % 2 === 0 ? "" : " alt")
         });
         // Etiqueta de la fila
-        const rowLabel = ce("text", {
+        ce("text", {
           x: MARGIN.left - 8,
           y: yCursor + ROW_HEIGHT / 2,
           "text-anchor": "end",
@@ -1843,27 +1452,18 @@
           class: "bar"
         });
         bar.__data = row;
-
-        const onEnterRow = () => {
-          window.__timelineHoverActive = true;
+        bar.addEventListener("mouseenter", (e) => {
           bar.classList.add("is-hovered");
           highlightPeriod(row.from, row.to,
             `${row.name} · ${formatYear(row.from)} – ${formatYear(row.to)}`);
           showTimelineTip(rowTipHTML(row), row.from, row.to);
-          highlightSitesForRow(row);
-        };
-        const onLeaveRow = () => {
-          window.__timelineHoverActive = false;
+        });
+        bar.addEventListener("mousemove", moveTip);
+        bar.addEventListener("mouseleave", () => {
           bar.classList.remove("is-hovered");
           hideTip();
           clearHighlight();
-          clearSiteHighlights();
-        };
-        [rowBg, rowLabel, bar].forEach(el => {
-          el.addEventListener("mouseenter", onEnterRow);
-          el.addEventListener("mouseleave", onLeaveRow);
         });
-        bar.addEventListener("mousemove", moveTip);
 
         yCursor += ROW_HEIGHT + ROW_GAP;
       });
@@ -1987,88 +1587,6 @@
     return escapeHTML(s).replace(/'/g, "&#39;");
   }
 
-  function normalizeText(s) {
-    return String(s ?? "")
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "")
-      .replace(/(^|\s)h\./g, "$1homo")
-      .replace(/(^|\s)a\./g, "$1australopithecus")
-      .replace(/(^|\s)p\./g, "$1paranthropus")
-      .replace(/[^a-z0-9]+/g, " ")
-      .trim();
-  }
-
-  function splitAliases(s) {
-    return String(s ?? "")
-      .split(/[\/;,]| y | o |·|\(|\)/i)
-      .map(part => normalizeText(part))
-      .filter(Boolean);
-  }
-
-  function siteMatchesTimelineRow(site, row) {
-    const overlaps = !(site.to < row.from || site.from > row.to);
-
-    if (row.category === "era" || row.category === "paleo") {
-      return overlaps;
-    }
-
-    if (row.category === "hominino") {
-      const hay = splitAliases(`${site.species} ; ${site.hallazgos} ; ${site.datos}`);
-      const needles = splitAliases(row.name);
-      return needles.some(n => n.length > 3 && hay.some(h => h.includes(n) || n.includes(h)));
-    }
-
-    if (row.category === "cultura") {
-      const hay = normalizeText(`${site.culture} ${site.group} ${site.periodo} ${site.hallazgos}`);
-      const keys = [];
-      const rowName = normalizeText(row.name);
-      if (rowName.includes("lomekw")) keys.push("lomekw");
-      if (rowName.includes("olduvay")) keys.push("olduvay", "modo 1");
-      if (rowName.includes("achelense")) keys.push("achelense", "modo 2");
-      if (rowName.includes("musteriense")) keys.push("musteriense", "modo 3");
-      if (rowName.includes("chatelperron")) keys.push("chatelperron");
-      if (rowName.includes("auri") || rowName.includes("laminar") || rowName.includes("paleolitico superior")) keys.push("aurinaciense", "gravetiense", "solutrense", "magdaleniense", "laminar", "paleolitico superior");
-      if (rowName.includes("middle stone age")) keys.push("middle stone age");
-      return overlaps && keys.some(k => hay.includes(k));
-    }
-
-    return overlaps;
-  }
-
-  function setMarkerState(marker, mode) {
-    const el = marker.getElement && marker.getElement();
-    if (!el) return;
-    const node = el.firstElementChild || el;
-    node.classList.remove("is-dim", "is-match");
-    if (mode === "dim") node.classList.add("is-dim");
-    if (mode === "match") node.classList.add("is-match");
-  }
-
-  function highlightSitesForRow(row) {
-    const markers = window.__siteMarkers || [];
-    if (!markers.length) return;
-    let matches = 0;
-    markers.forEach(marker => {
-      const ok = siteMatchesTimelineRow(marker.__site, row);
-      setMarkerState(marker, ok ? "match" : "dim");
-      if (ok) {
-        matches += 1;
-        marker.setZIndexOffset(1000);
-      } else {
-        marker.setZIndexOffset(0);
-      }
-    });
-  }
-
-  function clearSiteHighlights() {
-    const markers = window.__siteMarkers || [];
-    markers.forEach(marker => {
-      setMarkerState(marker, "normal");
-      marker.setZIndexOffset(0);
-    });
-  }
-
   function highlightPeriod(from, to, label) {
     const svg = document.getElementById("timeline");
     if (!svg.__xScale) return;
@@ -2159,8 +1677,6 @@
       if (e.target.checked) cultureLayer.addTo(map); else map.removeLayer(cultureLayer);
     });
 
-    const markers = [];
-
     SITES.forEach((site) => {
       const color = GROUP_COLORS[site.group] || "#888";
       const icon = L.divIcon({
@@ -2173,50 +1689,19 @@
         iconAnchor: [9, 9]
       });
       const marker = L.marker([site.lat, site.lng], { icon }).addTo(map);
-      marker.__site = site;
-      markers.push(marker);
 
-      marker.bindPopup(sitePopupHTML(site, color), {
-        maxWidth: 380,
-        minWidth: 280,
-        autoPan: true,
-        keepInView: true,
-        autoPanPaddingTopLeft: [28, 28],
-        autoPanPaddingBottomRight: [28, 28]
-      });
-
-      marker.on("popupopen", (ev) => {
-        const popup = ev.popup;
-        const adjust = () => {
-          popup.update();
-          map.panInside(marker.getLatLng(), { paddingTopLeft: [42, 42], paddingBottomRight: [42, 42] });
-        };
-        setTimeout(adjust, 0);
-        setTimeout(adjust, 220);
-        const popupEl = popup.getElement();
-        if (popupEl) {
-          popupEl.querySelectorAll("img").forEach((img) => {
-            if (img.complete) return;
-            img.addEventListener("load", adjust, { once: true });
-            img.addEventListener("error", adjust, { once: true });
-          });
-        }
-      });
+      marker.bindPopup(sitePopupHTML(site, color), { maxWidth: 340 });
 
       marker.on("mouseover", () => {
         highlightPeriod(site.from, site.to,
           `${site.name} · ${formatYear(site.from)} – ${formatYear(site.to)}`);
         showTimelineTip(siteTipHTML(site), site.from, site.to);
-        setMarkerState(marker, "match");
       });
       marker.on("mouseout", () => {
         hideTip();
         clearHighlight();
-        if (!(window.__timelineHoverActive)) clearSiteHighlights();
       });
     });
-
-    window.__siteMarkers = markers;
   }
 
   function sitePopupHTML(site, color) {
@@ -2286,6 +1771,3 @@
     buildTimeline();
     if (window.__archMap) requestAnimationFrame(() => window.__archMap.invalidateSize());
   });
-  </script>
-</body>
-</html>
